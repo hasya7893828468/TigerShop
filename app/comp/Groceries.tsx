@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,16 +8,16 @@ import {
   FlatList,
   StyleSheet,
   Alert,
-} from 'react-native';
-import axios from 'axios';
-import { Plus, Minus, ShoppingBag } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAppContext } from '../context/AppContext';
-import NavBar from '../context/NavBar';
-import { useNavigation } from "@react-navigation/native";
-import SearchBar from '../context/SearchBar';
-import HomeCard from './HomeCard';
+} from "react-native";
+import axios from "axios";
+import { Plus, Minus, ShoppingBag } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAppContext } from "../context/AppContext";
+import NavBar from "../context/NavBar";
+import SearchBar from "../context/SearchBar";
+import HomeCard from "./HomeCard";
+import Toast from "react-native-toast-message";
 
 const Groceries: React.FC = () => {
   const { addToCart, searchValue } = useAppContext();
@@ -26,15 +26,15 @@ const Groceries: React.FC = () => {
   const [cartBadgeVisibility, setCartBadgeVisibility] = useState<Record<string, boolean>>({});
   
   const router = useRouter();
+  const API_URL = "https://backendforworld.onrender.com/api/groceries";
+  const PLACEHOLDER_IMAGE = "https://via.placeholder.com/150";
 
-  // ✅ Fetch Data with Debugging
+  // ✅ Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       try {
         console.log("📡 Fetching groceries from API...");
-        
-        const response = await axios.get('https://backendforworld.onrender.com/api/groceries');
-        
+        const response = await axios.get(API_URL);
         console.log("✅ API Response:", response.data);
 
         if (!Array.isArray(response.data)) {
@@ -44,13 +44,15 @@ const Groceries: React.FC = () => {
 
         const formattedData = response.data.map((p: any) => ({
           ...p,
-          category: 'grocery',
+          img: p.img?.startsWith("http") ? p.img : `https://backendforworld.onrender.com/${p.img?.replace(/^\/+/, "")}`,
         }));
 
-        await AsyncStorage.setItem('groceriesData', JSON.stringify(formattedData));
+        await AsyncStorage.setItem("groceriesData", JSON.stringify(formattedData));
         setProductList(formattedData);
       } catch (error) {
         console.error("❌ Error fetching groceries:", error.response?.data || error.message);
+        const cachedData = await AsyncStorage.getItem("groceriesData");
+        if (cachedData) setProductList(JSON.parse(cachedData));
       }
     };
 
@@ -59,7 +61,7 @@ const Groceries: React.FC = () => {
 
   // ✅ Store Cart Quantities in AsyncStorage
   useEffect(() => {
-    AsyncStorage.setItem('groceriesQuantities', JSON.stringify(cartQuantities));
+    AsyncStorage.setItem("groceriesQuantities", JSON.stringify(cartQuantities));
   }, [cartQuantities]);
 
   // ✅ Search Filter
@@ -90,11 +92,18 @@ const Groceries: React.FC = () => {
     if (quantityToAdd > 0) {
       addToCart({
         ...item,
-        img: `https://backendforworld.onrender.com/${item?.img?.replace(/^\/+/, '')}`,
+        img: item.img?.startsWith("http") ? item.img : `https://backendforworld.onrender.com/${item.img?.replace(/^\/+/, "")}`,
         quantity: quantityToAdd,
       });
       setCartBadgeVisibility((prev) => ({ ...prev, [item._id]: false }));
-      Alert.alert("✅ Added to Cart", `${item.name} added successfully!`);
+      
+      Toast.show({
+        type: "success",
+        text1: "✅ Success",
+        text2: `${item.name} added to cart!`,
+        visibilityTime: 2000,
+        position: "bottom",
+      });
     }
   };
 
@@ -125,24 +134,30 @@ const Groceries: React.FC = () => {
               }}
             >
               <Image
-                source={{ uri: `https://backendforworld.onrender.com/${item.img?.replace(/^\/+/, "")}` }}
+                source={{
+                  uri: item.img || PLACEHOLDER_IMAGE,
+                }}
                 style={styles.image}
                 resizeMode="cover"
-                onError={(e) => console.error("❌ Image Load Error:", e.nativeEvent.error)}
+                onError={() => console.log("❌ Image failed to load:", item.img)}
               />
             </TouchableOpacity>
-            <View>
+
             <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
-              {item.name}
+              {item?.name || "Unnamed Item"}
             </Text>  
-            </View>
-           <View style={styles.priceContainer}>
+
+            <View style={styles.priceContainer}>
               <Text style={styles.price}>₹{item.price}</Text>
-              <Text style={styles.discount}>₹{item.Dprice}</Text>
+              {item.Dprice ? <Text style={styles.discount}>₹{item.Dprice}</Text> : null}
             </View>
-            <Text style={styles.discountBadge}>
-              {calculateDiscount(item.price, item.Dprice)}% OFF
-            </Text>
+
+            {item.Dprice && item.price > item.Dprice && (
+              <Text style={styles.discountBadge}>
+                {calculateDiscount(item.price, item.Dprice)}% OFF
+              </Text>
+            )}
+
             <View style={styles.controls}>
               <TouchableOpacity onPress={() => handleDecrement(item._id)} style={styles.button}>
                 <Minus size={18} color="white" />
@@ -159,6 +174,7 @@ const Groceries: React.FC = () => {
                 <Plus size={18} color="white" />
               </TouchableOpacity>
             </View>
+
             <TouchableOpacity onPress={() => handleAddToCart(item)} style={styles.addButton}>
               <Text style={styles.addButtonText}>Add</Text>
               <ShoppingBag size={18} color="white" />
@@ -166,6 +182,8 @@ const Groceries: React.FC = () => {
           </View>
         )}
       />
+
+      <Toast />
     </View>
   );
 };
@@ -176,8 +194,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: "white",
     borderRadius: 10,
-    padding: 8,
-    marginBottom: 12,
+    paddingBottom: 9,
+    marginBottom: 10,
     width: "49%",
     alignItems: "center",
     shadowColor: "#000",
@@ -186,48 +204,23 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  image: { width: 190, height: 151, borderRadius: 8 },
-  name: { fontSize: 14, fontWeight: "bold", marginTop: 8, textAlign: "center", width: "90%" },
-  priceContainer: { flexDirection: "row", alignItems: "center", marginTop: 4 },
-  discountBadge: { fontSize: 12, color: "red", fontWeight: "bold", marginLeft: 6 },
-  price: { fontSize: 20, fontWeight: "bold", color: "green", marginRight: 6 },
-  discount: { fontSize: 12, color: "gray", textDecorationLine: "line-through" },
-  controls: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-  },
-  button: {
-    backgroundColor: "#023e8a",
-    borderRadius: 4,
-    padding: 4,
-    marginHorizontal: 20,
-  },
-  addButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#023e8a",
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginTop: 8,
-    margin: 8,
-  },
-  addButtonText: {
-    color: "white",
-    fontWeight: "bold",
-    marginRight: 4,
-  },
   quantityInput: {
     width: 40,
     textAlign: "center",
     borderBottomWidth: 0,
     borderColor: "#ccc",
-    marginHorizontal: 1,
+    marginHorizontal: 20,
   },
+  image: { width: 190, height: 150, borderRadius: 8 },
+  name: { fontSize: 14, fontWeight: "bold", marginTop: 8, textAlign: "center" },
+  priceContainer: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  price: { fontSize: 20, fontWeight: "bold", color: "green", marginRight: 6 },
+  discount: { fontSize: 12, color: "gray", textDecorationLine: "line-through" },
+  discountBadge: { fontSize: 12, color: "red", fontWeight: "bold", marginLeft: 6 },
+  controls: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  button: { backgroundColor: "#023e8a", borderRadius: 4, padding: 4, marginHorizontal: 10 },
+  addButton: { flexDirection: "row", alignItems: "center", backgroundColor: "#023e8a", borderRadius: 6, paddingVertical: 6, paddingHorizontal: 12, marginTop: 8 },
+  addButtonText: { color: "white", fontWeight: "bold", marginRight: 4 },
 });
 
 export default Groceries;
-
-
-

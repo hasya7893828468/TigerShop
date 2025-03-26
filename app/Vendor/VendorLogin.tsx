@@ -118,7 +118,7 @@ const VendorLogin: React.FC = () => {
         <Text style={styles.linkText}>Don't have an account? Sign Up</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => router.push("/Login")}>
+      <TouchableOpacity onPress={() => router.push("/LoginScreen")}>
         <Text style={styles.linkText}>User Login</Text>
       </TouchableOpacity>
     </View>

@@ -15,6 +15,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAppContext } from "../context/AppContext";
 import { useNavigation } from "@react-navigation/native";
+import Toast from "react-native-toast-message";
 
 const GroceryDetails: React.FC = () => {
   const { addToCart } = useAppContext();
@@ -61,8 +62,13 @@ const GroceryDetails: React.FC = () => {
 
   const handleAddToCart = () => {
     addToCart({ ...grocery, quantity });
-    Alert.alert("Success", `Added ${quantity} item(s) to cart!`);
-  };
+Toast.show({
+        type: "success",
+        text1: "✅ Success",
+        text2: ` added to cart!`,
+        visibilityTime: 2000,
+        position: "bottom",
+      });   };
 
   const handleQuantityChange = (val: string) => {
     const num = Number(val) || 1;
@@ -83,11 +89,11 @@ const GroceryDetails: React.FC = () => {
 
           <Image
             source={{
-              uri: grocery.img
-                ? `https://backendforworld.onrender.com/${grocery.img.replace(/^\/+/, "")}`
-                : "https://via.placeholder.com/200",
+              uri: grocery.img.startsWith("http")
+                ? grocery.img
+                : `https://backendforworld.onrender.com${grocery.img.startsWith("/") ? grocery.img : "/" + grocery.img}`,
             }}
-            style={[styles.image, { height: cardSize }]}
+            style={{ width: 300, height: 400, marginTop: 50, borderRadius: 8 }}
           />
 
           <Text style={styles.name}>{grocery.name}</Text>
@@ -114,7 +120,10 @@ const GroceryDetails: React.FC = () => {
               <Text style={styles.addText}>🛒 Add to Cart</Text>
             </TouchableOpacity>
           </View>
+                          <Toast />
+          
         </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );

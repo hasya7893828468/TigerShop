@@ -18,6 +18,7 @@ import NavBar from "./context/NavBar";
 import { useNavigation } from "@react-navigation/native";
 import SearchBar from "./context/SearchBar";
 import HomeCard from "./comp/HomeCard";
+import Toast from "react-native-toast-message";
 
 interface Product {
   _id: string;
@@ -116,9 +117,13 @@ const Main: React.FC = () => {
         quantity: quantityToAdd,
       });
   
-      setCartBadgeVisibility((prev) => ({ ...prev, [item._id]: false }));
-      Alert.alert("✅ Added to Cart", `${item.name} added successfully!`);
-    }
+       Toast.show({
+             type: "success",
+             text1: "✅ Success",
+             text2: `${item.name} added to cart!`,
+             visibilityTime: 2000,
+             position: "bottom",
+           }); }
   };
 
   useEffect(() => {
@@ -175,12 +180,16 @@ const Main: React.FC = () => {
                 router.push("Card");
               }}
             >
-               <Image
-                              source={{ uri: `https://backendforworld.onrender.com/${item.img?.replace(/^\/+/, "")}` }}
-                              style={styles.image}
-                              resizeMode="cover"
-                              onError={(e) => console.error("❌ Image Load Error:", e.nativeEvent.error)}
-                            />
+              <Image
+                 source={{
+                   uri: item.img?.startsWith("http")
+                     ? item.img
+                     : `https://backendforworld.onrender.com/${item.img?.replace(/^\/+/, "")}`,
+                 }}
+                 style={styles.image}
+                 resizeMode="cover"
+                 onError={(e) => console.error("❌ Image Load Error:", item.img, e.nativeEvent.error)}
+               />
             </TouchableOpacity>
             <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
               {item.name}
@@ -215,6 +224,8 @@ value={String(cartQuantities[item._id] ?? 1)}
           </View>
         )}
       />
+            <Toast />
+      
     </View>
   );
 };

@@ -6,9 +6,10 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
+  ActivityIndicator,
 } from "react-native";
 import axios from "axios";
-import { useNavigation } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 
 const apiUrl = "https://backendforworld.onrender.com/api/auth/register";
 
@@ -18,13 +19,16 @@ const SignUpScreen: React.FC = () => {
   const [password, setPassword] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
-  const navigation = useNavigation();
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleSignUp = async () => {
     if (!name || !email || !password || !address || !phone) {
-      Alert.alert("Error", "Please fill all fields!");
+      Alert.alert("⚠️ Error", "Please fill all fields!");
       return;
     }
+
+    setLoading(true); // Show loading indicator
 
     try {
       const response = await axios.post(apiUrl, {
@@ -36,14 +40,16 @@ const SignUpScreen: React.FC = () => {
       });
 
       if (response.data.success) {
-        Alert.alert("Success", "Account created! Redirecting to login.");
-        navigation.navigate("Login" as never);
+        Alert.alert("✅ Success", "Account created! Redirecting to login.");
+        router.push("/"); // ✅ Redirect to index.tsx (Login Screen)
       } else {
-        Alert.alert("Error", response.data.message || "Registration failed.");
+        Alert.alert("❌ Error", response.data.message || "Registration failed.");
       }
     } catch (error) {
-      console.error("Error:", error);
-      Alert.alert("Error", "Registration failed. Please check your backend.");
+      console.error("❌ Error:", error);
+      Alert.alert("❌ Error", "Registration failed. Please check your backend.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -51,7 +57,7 @@ const SignUpScreen: React.FC = () => {
     <View style={styles.container}>
       <Text style={styles.title}>Create an Account</Text>
       <Text style={styles.subtitle}>Join us and start your journey</Text>
-      
+
       <TextInput
         placeholder="Name"
         value={name}
@@ -63,6 +69,7 @@ const SignUpScreen: React.FC = () => {
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
+        autoCapitalize="none"
         style={styles.input}
       />
       <TextInput
@@ -85,13 +92,19 @@ const SignUpScreen: React.FC = () => {
         keyboardType="phone-pad"
         style={styles.input}
       />
-      
-      <TouchableOpacity style={styles.signupButton} onPress={handleSignUp}>
-        <Text style={styles.buttonText}>Sign Up</Text>
+
+      <TouchableOpacity style={styles.signupButton} onPress={handleSignUp} disabled={loading}>
+        {loading ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Sign Up</Text>
+        )}
       </TouchableOpacity>
-      
-      <TouchableOpacity onPress={() => navigation.navigate("Login" as never)}>
-        <Text style={styles.linkText}>Already have an account? <Text style={styles.link}>Login</Text></Text>
+
+      <TouchableOpacity onPress={() => router.push("/")}>
+        <Text style={styles.linkText}>
+          Already have an account? <Text style={styles.link}>Login</Text>
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -125,7 +138,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 15,
     fontSize: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -139,6 +152,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     marginTop: 10,
+    opacity: 0.9,
   },
   buttonText: {
     color: "#fff",

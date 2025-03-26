@@ -30,7 +30,7 @@ const NavBar: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {isMenuOpen && <MenuDropdown />}
+       <MenuDropdown />
 
       {/* Full-screen Cart Modal */}
       <Modal visible={isCartOpen} animationType="slide" transparent={true}>

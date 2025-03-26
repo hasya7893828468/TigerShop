@@ -15,6 +15,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAppContext } from "../app/context/AppContext";
 import { useNavigation } from "@react-navigation/native";
+import Toast from "react-native-toast-message";
 
 const ProductDetails: React.FC = () => {
   const { addToCart } = useAppContext();
@@ -42,12 +43,8 @@ const ProductDetails: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener("keyboardDidShow", () => {
-      setKeyboardVisible(true);
-    });
-    const keyboardDidHideListener = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardVisible(false);
-    });
+    const keyboardDidShowListener = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const keyboardDidHideListener = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
 
     return () => {
       keyboardDidShowListener.remove();
@@ -59,48 +56,47 @@ const ProductDetails: React.FC = () => {
     return <Text style={styles.errorText}>⚠️ No product found!</Text>;
   }
 
+  const imageUrl = product.img
+    ? product.img.startsWith("http")
+      ? product.img
+      : `https://backendforworld.onrender.com${product.img.startsWith("/") ? product.img : "/" + product.img}`
+    : "https://via.placeholder.com/300";
+
   const handleAddToCart = () => {
     addToCart({ ...product, quantity });
-    Alert.alert("Success", `Added ${quantity} item(s) to cart!`);
-  };
+ Toast.show({
+        type: "success",
+        text1: "✅ Success",
+        text2: ` added to cart!`,
+        visibilityTime: 2000,
+        position: "bottom",
+      });  };
 
   const handleQuantityChange = (val: string) => {
-    const num = Number(val) || 1;
+    const num = Math.max(Number(val) || 1, 1);
     setQuantity(num);
     setCardSize(num > 1 ? 300 : 400);
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
-    >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flexContainer}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.container}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Text style={styles.backText}>🔙</Text>
           </TouchableOpacity>
 
-          <Image
-            source={{
-              uri: product.img
-                ? `https://backendforworld.onrender.com/${product.img.replace(/^\/+/, "")}`
-                : "https://via.placeholder.com/200",
-            }}
-            style={[styles.image, { height: cardSize }]}
-          />
+          <Image source={{ uri: imageUrl }} style={styles.image} />
 
           <Text style={styles.name}>{product.name}</Text>
 
           <View style={styles.priceContainer}>
             <Text style={styles.price}>₹{product.price}</Text>
-            {product.Dprice && (
-              <Text style={styles.strikethrough}>₹{product.Dprice}</Text>
-            )}
+            {product.Dprice && <Text style={styles.strikethrough}>₹{product.Dprice}</Text>}
           </View>
 
           {product.Dprice && (
-            <Text style={styles.offerText}>🔥 Save ₹{product.Dprice - product.price}!</Text>
+            <Text style={styles.offerText}>🔥 Special Offer: Save ₹{product.Dprice - product.price}!</Text>
           )}
 
           <View style={styles.quantityContainer}>
@@ -114,6 +110,8 @@ const ProductDetails: React.FC = () => {
               <Text style={styles.addText}>🛒 Add to Cart</Text>
             </TouchableOpacity>
           </View>
+                <Toast />
+          
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -123,10 +121,12 @@ const ProductDetails: React.FC = () => {
 export default ProductDetails;
 
 const styles = StyleSheet.create({
+  flexContainer: { flex: 1 },
+  scrollContainer: { flexGrow: 1 },
   container: { flex: 1, backgroundColor: "#fff", padding: 20, alignItems: "center" },
   backButton: { position: "absolute", top: 20, left: 20, backgroundColor: "#023e8a", padding: 8, borderRadius: 20 },
   backText: { fontSize: 20, color: "#fff" },
-  image: { width: 300, height: 350, borderRadius: 10, marginVertical: 40 },
+  image: { width: 300, height: 400, borderRadius: 8, marginTop: 50 },
   name: { fontSize: 22, fontWeight: "bold", marginTop: 10, textAlign: "center" },
   priceContainer: { flexDirection: "row", alignItems: "center", marginVertical: 10 },
   price: { fontSize: 24, fontWeight: "bold", color: "#f59e0b" },

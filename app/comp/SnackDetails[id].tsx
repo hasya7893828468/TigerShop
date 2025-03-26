@@ -15,6 +15,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAppContext } from "../context/AppContext";
 import { useNavigation } from "@react-navigation/native";
+import Toast from "react-native-toast-message";
 
 const SnackDetails: React.FC = () => {
   const { addToCart } = useAppContext();
@@ -61,8 +62,13 @@ const SnackDetails: React.FC = () => {
 
   const handleAddToCart = () => {
     addToCart({ ...snack, quantity });
-    Alert.alert("Success", `Added ${quantity} item(s) to cart!`);
-  };
+ Toast.show({
+        type: "success",
+        text1: "✅ Success",
+        text2: ` added to cart!`,
+        visibilityTime: 2000,
+        position: "bottom",
+      });  };
 
   const handleQuantityChange = (val: string) => {
     const num = Number(val) || 1;
@@ -116,6 +122,8 @@ const SnackDetails: React.FC = () => {
               <Text style={styles.addText}>🛒 Add to Cart</Text>
             </TouchableOpacity>
           </View>
+                          <Toast />
+          
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

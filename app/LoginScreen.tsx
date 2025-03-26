@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import axios from "axios";
 import { useRouter } from "expo-router";
@@ -35,29 +36,27 @@ export default function LoginScreen() {
 
       if (response.data.success && response.data.token) {
         await AsyncStorage.multiRemove(["authToken", "userId", "userData"]);
-      
+
         const user = {
           id: response.data.user.id || response.data.user._id,
           name: response.data.user.name,
           email: response.data.user.email,
-          phone: response.data.user.phone || "", // Store phone number
-          address: response.data.user.address || "", // Store address
+          phone: response.data.user.phone || "",
+          address: response.data.user.address || "",
         };
-      
-        // Save data to AsyncStorage
+
         await AsyncStorage.setItem("authToken", response.data.token);
         await AsyncStorage.setItem("userId", user.id);
         await AsyncStorage.setItem("userData", JSON.stringify(user));
-      
+
         Alert.alert("✅ Success", "Login successful!");
+
         setTimeout(() => router.replace("/Main"), 500);
       } else {
         Alert.alert("❌ Error", response.data.message || "Invalid credentials");
       }
-      
     } catch (error) {
       console.error("❌ Login Error:", error);
-
       let errorMessage = "Something went wrong.";
       if (error.response) {
         console.log("🛑 Server Response:", error.response.data);
@@ -68,7 +67,6 @@ export default function LoginScreen() {
       } else {
         console.log("⚠️ Unexpected error:", error.message);
       }
-
       Alert.alert("⚠️ Login Failed", errorMessage);
     } finally {
       setLoading(false);
@@ -104,12 +102,7 @@ export default function LoginScreen() {
         <Text style={styles.buttonText}>{loading ? "Logging in..." : "Login"}</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.vendorButton}
-        onPress={() => router.push("/Vendor/VendorLogin")}
-      >
-        <Text style={styles.buttonText}>Vendor Login</Text>
-      </TouchableOpacity>
+      {loading && <ActivityIndicator size="large" color="#0f62fe" />}
 
       <Text style={styles.text}>
         Don't have an account?{" "}
@@ -117,67 +110,26 @@ export default function LoginScreen() {
           Sign Up
         </Text>
       </Text>
+
+      <TouchableOpacity
+        style={styles.vendorButton}
+        onPress={() => router.push("/Vendor/VendorLogin")}
+      >
+        <Text style={styles.vendorButtonText}>Vendor Login</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    backgroundColor: "#f4f4f4",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 5,
-    color: "#161616",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#525252",
-    marginBottom: 20,
-  },
-  input: {
-    width: "100%",
-    height: 50,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    marginBottom: 10,
-  },
-  loginButton: {
-    backgroundColor: "#0f62fe",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    width: "100%",
-    marginTop: 10,
-  },
-  vendorButton: {
-    backgroundColor: "#393939",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    width: "100%",
-    marginTop: 10,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  text: {
-    marginTop: 10,
-    fontSize: 14,
-    textAlign: "center",
-    color: "#161616",
-  },
-  link: {
-    color: "#0f62fe",
-    fontWeight: "bold",
-  },
+  container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20, backgroundColor: "#f4f4f4" },
+  title: { fontSize: 28, fontWeight: "bold", marginBottom: 5, color: "#161616" },
+  subtitle: { fontSize: 16, color: "#525252", marginBottom: 20 },
+  input: { width: "100%", height: 50, backgroundColor: "#fff", borderRadius: 8, paddingHorizontal: 15, fontSize: 16, marginBottom: 10 },
+  loginButton: { backgroundColor: "#0f62fe", padding: 12, borderRadius: 8, alignItems: "center", width: "100%", marginTop: 10 },
+  buttonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  text: { marginTop: 10, fontSize: 14, textAlign: "center", color: "#161616" },
+  link: { color: "#0f62fe", fontWeight: "bold" },
+  vendorButton: { marginTop: 20, backgroundColor: "#4CAF50", padding: 12, borderRadius: 8, alignItems: "center", width: "100%" },
+  vendorButtonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
 });

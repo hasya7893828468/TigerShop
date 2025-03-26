@@ -1,15 +1,28 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, FlatList, ActivityIndicator, Alert, Image, StyleSheet, TouchableOpacity, Linking
+  View, 
+  Text, 
+  FlatList, 
+  ActivityIndicator, 
+  Alert, 
+  Image, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Linking,
+  ScrollView,
+  RefreshControl
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MaterialIcons, FontAwesome, Ionicons, Entypo } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const PendingOrders: React.FC = () => {
   const [pendingOrders, setPendingOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [vendorLocation, setVendorLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const fetchVendorId = async () => {
@@ -26,10 +39,18 @@ const PendingOrders: React.FC = () => {
     fetchVendorId();
   }, []);
 
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    if (vendorId) {
+      fetchOrders(vendorId).then(() => setRefreshing(false));
+    } else {
+      setRefreshing(false);
+    }
+  }, [vendorId]);
+
   const sendWhatsAppBill = (order) => {
     if (!order.phone) return Alert.alert("Error", "Customer phone number is missing");
 
-    // 🧾 Generate Bill Message
     let message = `🧾 *Order Invoice* 🧾\n\n👤 *Customer:* ${order.userName || "Unknown"}\n📞 *Phone:* ${order.phone}\n🏠 *Address:* ${order.address || "No Address Provided"}\n\n📌 *Order Details:*\n`;
 
     let totalAmount = 0;
@@ -42,20 +63,16 @@ const PendingOrders: React.FC = () => {
 
     message += `\n\n🛒 *Total Amount:* ₹${totalAmount.toFixed(2)}\n\n✅ *Thank you for ordering with us!*`;
 
-    // Encode message for URL
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/${order.phone}?text=${encodedMessage}`;
 
-    // Open WhatsApp
     Linking.openURL(whatsappUrl);
   };
 
   const fetchOrders = useCallback(async (id: string) => {
     try {
-      console.log(`Fetching pending orders for vendor: ${id}`);
+      setLoading(true);
       const response = await axios.get(`https://backendforworld.onrender.com/api/orders/vendor/${id}`); 
-      console.log("Fetched pending orders:", response.data);
-  
       const pending = response.data.filter((order) => order.status === "Pending");
       setPendingOrders(pending);
     } catch (error) {
@@ -66,9 +83,6 @@ const PendingOrders: React.FC = () => {
     }
   }, []);
   
-  
-  
-
   const fetchVendorLocation = async () => {
     if (!vendorId) return;
 
@@ -79,9 +93,6 @@ const PendingOrders: React.FC = () => {
           latitude: response.data.latitude,
           longitude: response.data.longitude,
         });
-        console.log("📍 Vendor Location Fetched:", response.data);
-      } else {
-        console.log("❌ Vendor location not found.");
       }
     } catch (error) {
       console.error("❌ Error fetching vendor location:", error);
@@ -98,101 +109,165 @@ const PendingOrders: React.FC = () => {
     try {
       await axios.put(`https://backendforworld.onrender.com/api/orders/complete-order/${orderId}`);
       setPendingOrders((prevOrders) => prevOrders.filter((order) => order._id !== orderId));
-      Alert.alert("✅ Success", "Order marked as completed.");
+      Alert.alert("Success", "Order marked as completed.");
     } catch (error) {
       console.error("❌ Error completing order:", error);
       Alert.alert("Error", "Failed to complete order.");
     }
   }, []);
 
-  if (loading) return <ActivityIndicator size="large" color="#00f" />;
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6C63FF" />
+        <Text style={styles.loadingText}>Loading Orders...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Pending Orders</Text>
-      {vendorLocation && (
-        <View style={styles.vendorLocationContainer}>
-          <Text style={styles.vendorLocationText}>📍 Vendor Location: {vendorLocation.latitude}, {vendorLocation.longitude}</Text>
+      <LinearGradient
+        colors={['#6C63FF', '#4A42E8']}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+      >
+        <Text style={styles.headerTitle}>Pending Orders</Text>
+        {vendorLocation && (
           <TouchableOpacity
             onPress={() => Linking.openURL(`https://www.google.com/maps?q=${vendorLocation.latitude},${vendorLocation.longitude}`)}
-            style={styles.directionButton}
+            style={styles.locationBadge}
           >
-            <Text style={styles.directionButtonText}>🌍 View Vendor Location</Text>
+            <Ionicons name="location-sharp" size={16} color="white" />
+            <Text style={styles.locationText}>Your Location</Text>
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </LinearGradient>
+
       {pendingOrders.length === 0 ? (
-        <Text style={styles.noOrders}>No pending orders found</Text>
+        <ScrollView
+          contentContainerStyle={styles.emptyContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          <View style={styles.emptyIllustration}>
+            <MaterialIcons name="pending-actions" size={80} color="#6C63FF" />
+          </View>
+          <Text style={styles.emptyTitle}>No Pending Orders</Text>
+          <Text style={styles.emptySubtitle}>When you receive new orders, they'll appear here</Text>
+          <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+            <MaterialIcons name="refresh" size={24} color="#6C63FF" />
+            <Text style={styles.refreshText}>Refresh</Text>
+          </TouchableOpacity>
+        </ScrollView>
       ) : (
         <FlatList
           data={pendingOrders}
           keyExtractor={(order) => order._id}
-          initialNumToRender={5}
-          getItemLayout={(data, index) => ({ length: 160, offset: 160 * index, index })}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          contentContainerStyle={styles.listContent}
           renderItem={({ item }) => {
-            // Calculate total amount for the order
             const totalAmount = item.cartItems.reduce((acc, product) => acc + (product.price * product.quantity), 0);
+            const orderDate = new Date(item.createdAt);
+            const formattedDate = `${orderDate.toLocaleDateString()} at ${orderDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
 
             return (
               <View style={styles.orderCard}>
-                <Text style={styles.orderId}>Order ID: {item._id}</Text>
-                <Text style={styles.customer}>📅 Date: {new Date(item.createdAt).toLocaleString()}</Text>
-                <Text style={styles.customer}>👤 Customer: {item.userName || "Unknown User"}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <TouchableOpacity onPress={() => item.phone && Linking.openURL(`tel:${item.phone}`)}>
-                    <Text style={[styles.customer, { color: "blue", textDecorationLine: "underline" }]}>
-                      📞 Call: {item.phone || "No phone provided"}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => item.phone && Linking.openURL(`sms:${item.phone}?body=Thanks%20for%20ordering%20with%20us!%20We%20appreciate%20your%20support.`)}
-                    style={styles.smsButton}
-                  >
-                    <Text style={styles.smsButtonText}>📩 SMS</Text>
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity
-                  onPress={() => sendWhatsAppBill(item)}
-                  style={styles.whatsappButton}
-                >
-                  <Text style={styles.whatsappButtonText}>💬 Send Bill on WhatsApp</Text>
-                </TouchableOpacity>
-                <Text style={styles.customer}>🏠 Address: {item.address || "No address provided"}</Text>
-                <FlatList
-                  data={item.cartItems}
-                  keyExtractor={(product) => product._id}
-                  renderItem={({ item }) => (
-                    <View style={styles.itemRow}>
-<Image 
-  source={{ uri: item.img.startsWith("http") ? item.img : `https://backendforworld.onrender.com/${item.img.replace(/^\/+/, "")}` }} 
-  style={styles.image} 
-  resizeMode="contain"
-/>
-                      <View style={styles.itemDetails}>
-                        <Text style={styles.itemName}>{item.name}</Text>
-                        <Text style={styles.itemPrice}>₹{item.price} x {item.quantity}</Text>
-                        <Text style={styles.itemTotal}>💰 Total: ₹{(item.price * item.quantity).toFixed(2)}</Text>
-                      </View>
+                <View style={styles.orderHeader}>
+                  <View style={styles.orderIdContainer}>
+                    <Text style={styles.orderId}>Order #{item._id.slice(-6).toUpperCase()}</Text>
+                    <Text style={styles.orderDate}>{formattedDate}</Text>
+                  </View>
+                  <View style={styles.orderStatus}>
+                    <View style={styles.statusBadge}>
+                      <Text style={styles.statusText}>PENDING</Text>
                     </View>
-                  )}
-                />
-                <View style={styles.totalContainer}>
-                  <Text style={styles.totalText}>🛒 Order Total: ₹{totalAmount.toFixed(2)}</Text>
+                  </View>
                 </View>
-                {item.userLocation?.latitude && item.userLocation?.longitude && (
+
+                <View style={styles.customerInfo}>
+                  <View style={styles.customerAvatar}>
+                    <FontAwesome name="user" size={20} color="#6C63FF" />
+                  </View>
+                  <View style={styles.customerDetails}>
+                    <Text style={styles.customerName}>{item.userName || "Customer"}</Text>
+                    <View style={styles.contactRow}>
+                      <TouchableOpacity 
+                        style={styles.contactButton} 
+                        onPress={() => item.phone && Linking.openURL(`tel:${item.phone}`)}
+                      >
+                        <Entypo name="phone" size={16} color="#6C63FF" />
+                        <Text style={styles.contactText}>{item.phone || "No phone"}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.contactButton} 
+                        onPress={() => item.phone && Linking.openURL(`sms:${item.phone}`)}
+                      >
+                        <MaterialIcons name="sms" size={16} color="#6C63FF" />
+                        <Text style={styles.contactText}>SMS</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Delivery Address</Text>
+                  <Text style={styles.addressText}>{item.address || "No address provided"}</Text>
+                </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Order Items</Text>
+                  {item.cartItems.map((product) => (
+                    <View key={product._id} style={styles.productItem}>
+                      <Image 
+                        source={{ uri: product.img.startsWith("http") ? product.img : `https://backendforworld.onrender.com/${product.img.replace(/^\/+/, "")}` }} 
+                        style={styles.productImage} 
+                      />
+                      <View style={styles.productDetails}>
+                        <Text style={styles.productName}>{product.name}</Text>
+                        <Text style={styles.productPrice}>₹{product.price} × {product.quantity}</Text>
+                      </View>
+                      <Text style={styles.productTotal}>₹{(product.price * product.quantity).toFixed(2)}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.totalContainer}>
+                  <Text style={styles.totalLabel}>Order Total:</Text>
+                  <Text style={styles.totalAmount}>₹{totalAmount.toFixed(2)}</Text>
+                </View>
+
+                <View style={styles.actionButtons}>
+                  {item.userLocation?.latitude && item.userLocation?.longitude && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.locationButton]}
+                      onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.userLocation.latitude},${item.userLocation.longitude}`)}
+                    >
+                      <Ionicons name="location-sharp" size={18} color="white" />
+                      <Text style={styles.actionButtonText}>Customer Location</Text>
+                    </TouchableOpacity>
+                  )}
+                  
                   <TouchableOpacity
-                    onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.userLocation.latitude},${item.userLocation.longitude}`)}
-                    style={styles.directionButton}
+                    style={[styles.actionButton, styles.whatsappButton]}
+                    onPress={() => sendWhatsAppBill(item)}
                   >
-                    <Text style={styles.directionButtonText}>📍 View Customer Location</Text>
+                    <FontAwesome name="whatsapp" size={18} color="white" />
+                    <Text style={styles.actionButtonText}>Send Bill</Text>
                   </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={styles.completeButton}
-                  onPress={() => handleCompleteOrder(item._id)}
-                >
-                  <Text style={styles.completeButtonText}>✅ Mark as Completed</Text>
-                </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.completeButton]}
+                    onPress={() => handleCompleteOrder(item._id)}
+                  >
+                    <MaterialIcons name="check-circle" size={18} color="white" />
+                    <Text style={styles.actionButtonText}>Complete</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           }}
@@ -203,28 +278,269 @@ const PendingOrders: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#f8f9fa" },
-  title: { fontSize: 22, fontWeight: "bold", textAlign: "center", marginBottom: 10 },
-  noOrders: { textAlign: "center", color: "gray", marginTop: 20 },
-  orderCard: { backgroundColor: "white", padding: 10, marginBottom: 10, borderRadius: 10, elevation: 3 },
-  orderId: { fontWeight: "bold", fontSize: 16, marginBottom: 5 },
-  customer: { color: "gray", fontSize: 14 },
-  itemRow: { flexDirection: "row", alignItems: "center", marginTop: 5, backgroundColor: "#f1f3f5", padding: 5, borderRadius: 5 },
-  image: { width: 50, height: 50, marginRight: 10, borderRadius: 5 },
-  itemDetails: { flex: 1 },
-  itemName: { fontWeight: "bold" },
-  itemPrice: { color: "gray" },
-  itemTotal: { fontWeight: "bold", color: "blue" },
-  totalContainer: { backgroundColor: "#e9ecef", padding: 5, marginTop: 10, borderRadius: 5 },
-  totalText: { fontSize: 16, fontWeight: "bold", textAlign: "center" },
-  directionButton: { marginTop: 10, backgroundColor: "#ff9800", padding: 10, borderRadius: 5, alignItems: "center" },
-  directionButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
-  completeButton: { backgroundColor: "green", padding: 10, borderRadius: 5, alignItems: "center", marginTop: 10 },
-  completeButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
-  smsButton: { backgroundColor: "#007bff", padding: 8, borderRadius: 5 },
-  smsButtonText: { color: "white", fontSize: 14, fontWeight: "bold" },
-  whatsappButton: { backgroundColor: "#25D366", padding: 8, borderRadius: 5 },
-  whatsappButtonText: { color: "white", fontSize: 14, fontWeight: "bold" },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  loadingText: {
+    marginTop: 16,
+    color: '#6C63FF',
+    fontSize: 16,
+  },
+  header: {
+    padding: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+  },
+  locationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  locationText: {
+    color: 'white',
+    marginLeft: 5,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyIllustration: {
+    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    maxWidth: 300,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#6C63FF',
+  },
+  refreshText: {
+    color: '#6C63FF',
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  orderCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  orderIdContainer: {
+    flex: 1,
+  },
+  orderId: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  orderDate: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  orderStatus: {
+    justifyContent: 'center',
+  },
+  statusBadge: {
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: '#FF9800',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  customerInfo: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  customerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EDE7F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  contactRow: {
+    flexDirection: 'row',
+  },
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  contactText: {
+    color: '#6C63FF',
+    marginLeft: 4,
+    fontSize: 14,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  addressText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  productItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  productImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  productDetails: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  productPrice: {
+    fontSize: 12,
+    color: '#666',
+  },
+  productTotal: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  totalAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#6C63FF',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    marginLeft: 6,
+    fontSize: 14,
+  },
+  locationButton: {
+    backgroundColor: '#FF9800',
+  },
+  whatsappButton: {
+    backgroundColor: '#25D366',
+  },
+  completeButton: {
+    backgroundColor: '#4CAF50',
+  },
 });
 
 export default PendingOrders;

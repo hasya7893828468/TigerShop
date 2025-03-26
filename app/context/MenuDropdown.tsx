@@ -18,8 +18,11 @@ const MenuDropdown: React.FC = () => {
       <Modal transparent visible={isVisible} animationType="fade">
         <Pressable style={styles.overlay} onPress={() => setIsVisible(false)}>
           <View style={styles.menu}>
-            <TouchableOpacity onPress={() => { router.push("/Login"); setIsVisible(false); }} style={styles.menuItem}>
+            <TouchableOpacity onPress={() => { router.push("/LoginScreen"); setIsVisible(false); }} style={styles.menuItem}>
               <Text>Login</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { router.push("/Logout"); setIsVisible(false); }} style={styles.menuItem}>
+              <Text>Logout</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { router.push("/profile"); setIsVisible(false); }} style={styles.menuItem}>
               <Text>Profile</Text>

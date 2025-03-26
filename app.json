@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "app",
+    "name": "tiger",
     "slug": "app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -39,8 +43,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "c7681d77-6e46-4818-8182-e6e6698c7af2"
+        "projectId": "29477672-5f3d-4186-acce-cf223d386ff6"
       }
-    }
+    },
+    "owner": "ram1234567890"
   }
 }

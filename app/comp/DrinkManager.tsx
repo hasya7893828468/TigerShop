@@ -8,11 +8,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  StyleSheet,
+  ScrollView
 } from "react-native";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
 import DraggableFlatList from "react-native-draggable-flatlist";
-import { Trash2, UploadCloud, PlusCircle } from "lucide-react-native";
+import { Trash2, UploadCloud, PlusCircle, ChevronDown, ChevronUp } from "lucide-react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 interface Drink {
@@ -34,16 +36,16 @@ const DrinkManager: React.FC = () => {
     Dprice: "",
     Off: "",
   });
+  const [isFormExpanded, setIsFormExpanded] = useState(false);
 
-  // ✅ Fetch all drinks on mount
   useEffect(() => {
     const fetchDrinks = async () => {
       try {
         const res = await axios.get("https://backendforworld.onrender.com/api/drinks");
-        console.log("✅ Fetched Drinks:", res.data);
         setDrinks(res.data);
       } catch (error) {
-        console.error("❌ Error fetching drinks:", error);
+        console.error("Error fetching drinks:", error);
+        Alert.alert("Error", "Failed to fetch drinks");
       } finally {
         setLoading(false);
       }
@@ -51,11 +53,9 @@ const DrinkManager: React.FC = () => {
     fetchDrinks();
   }, []);
 
-  // ✅ Handle input changes
   const handleChange = (name: string, value: string) => {
     setNewDrink((prev) => ({ ...prev, [name]: value }));
 
-    // ✅ Auto-calculate discount percentage
     if (name === "Dprice") {
       const originalPrice = parseFloat(newDrink.price);
       const discountedPrice = parseFloat(value);
@@ -66,12 +66,10 @@ const DrinkManager: React.FC = () => {
     }
   };
 
-  // ✅ Pick image from gallery
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false, // ❌ Disable cropping to keep full image
-      aspect: [4, 3], // (Optional) You can remove this if you want any aspect ratio
+      allowsEditing: false,
       quality: 1,
     });
   
@@ -79,20 +77,18 @@ const DrinkManager: React.FC = () => {
       setNewDrink((prev) => ({ ...prev, img: result.assets[0].uri }));
     }
   };
-  
 
-  // ✅ Add new drink
   const handleAddDrink = async () => {
     if (!newDrink.name || !newDrink.img || !newDrink.price) {
-      Alert.alert("⚠️ Warning", "Please fill all fields!");
+      Alert.alert("Warning", "Please fill all required fields!");
       return;
     }
 
     const formData = new FormData();
     formData.append("name", newDrink.name);
     formData.append("price", newDrink.price);
-    formData.append("Dprice", newDrink.Dprice || "");
-    formData.append("Off", newDrink.Off || "");
+    if (newDrink.Dprice) formData.append("Dprice", newDrink.Dprice);
+    if (newDrink.Off) formData.append("Off", newDrink.Off);
 
     formData.append("img", {
       uri: newDrink.img,
@@ -101,20 +97,23 @@ const DrinkManager: React.FC = () => {
     });
 
     try {
+      setLoading(true);
       const res = await axios.post("https://backendforworld.onrender.com/api/drinks", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      console.log("✅ Drink Added:", res.data);
       setDrinks([...drinks, res.data.drink]);
       setNewDrink({ name: "", img: "", price: "", Dprice: "", Off: "" });
+      setIsFormExpanded(false);
+      Alert.alert("Success", "Drink added successfully!");
     } catch (error) {
-      console.error("❌ Error adding drink:", error.response?.data || error.message);
-      Alert.alert("❌ Error", "Failed to add drink. Check server logs.");
+      console.error("Error adding drink:", error);
+      Alert.alert("Error", "Failed to add drink");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ✅ Delete a drink
   const handleDeleteDrink = async (id: string) => {
     Alert.alert("Confirm Delete", "Are you sure you want to delete this drink?", [
       { text: "Cancel", style: "cancel" },
@@ -123,67 +122,337 @@ const DrinkManager: React.FC = () => {
         style: "destructive",
         onPress: async () => {
           try {
+            setLoading(true);
             await axios.delete(`https://backendforworld.onrender.com/api/drinks/${id}`);
             setDrinks(drinks.filter((drink) => drink._id !== id));
           } catch (error) {
-            console.error("❌ Error deleting drink:", error.response?.data || error.message);
-            Alert.alert("❌ Error", "Failed to delete drink.");
+            console.error("Error deleting drink:", error);
+            Alert.alert("Error", "Failed to delete drink");
+          } finally {
+            setLoading(false);
           }
         },
       },
     ]);
   };
 
+  const toggleForm = () => {
+    setIsFormExpanded(!isFormExpanded);
+  };
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1, backgroundColor: "#f8f8f8", padding: 30 }}>
-        <Text style={{ fontSize: 24, fontWeight: "bold", textAlign: "center" }}>🍹 Drink Manager</Text>
-
-        {/* ✅ Add Drink Form */}
-        <View style={{ backgroundColor: "#fff", padding: 20, borderRadius: 10, marginTop: 20 }}>
-          <TextInput placeholder="Drink Name" value={newDrink.name} onChangeText={(text) => handleChange("name", text)} style={{ borderBottomWidth: 1, marginBottom: 10, padding: 8 }} />
-
-          <TouchableOpacity onPress={pickImage} style={{ backgroundColor: "#e0e0e0", padding: 10, borderRadius: 5, alignItems: "center", marginBottom: 10 }}>
-            <UploadCloud size={24} />
-            <Text>Pick Image</Text>
+      <View style={styles.container}>
+        <Text style={styles.headerText}>🍹 Drink Menu Manager</Text>
+        
+        {/* Add Drink Form */}
+        <View style={styles.formContainer}>
+          <TouchableOpacity onPress={toggleForm} style={styles.toggleFormButton}>
+            <Text style={styles.toggleFormText}>{isFormExpanded ? "Hide Form" : "Add New Drink"}</Text>
+            {isFormExpanded ? <ChevronUp size={20} color="#6C63FF" /> : <ChevronDown size={20} color="#6C63FF" />}
           </TouchableOpacity>
-
-          <TextInput placeholder="Price" value={newDrink.price} keyboardType="numeric" onChangeText={(text) => handleChange("price", text)} style={{ borderBottomWidth: 1, marginBottom: 10, padding: 8 }} />
-          <TextInput placeholder="Discounted Price" value={newDrink.Dprice} keyboardType="numeric" onChangeText={(text) => handleChange("Dprice", text)} style={{ borderBottomWidth: 1, marginBottom: 10, padding: 8 }} />
-
-          <TouchableOpacity onPress={handleAddDrink} style={{ backgroundColor: "#007bff", padding: 10, borderRadius: 5, alignItems: "center" }}>
-            <PlusCircle size={24} color="white" />
-            <Text style={{ color: "white" }}>Add Drink</Text>
-          </TouchableOpacity>
+          
+          {isFormExpanded && (
+            <View style={styles.formContent}>
+              <TextInput
+                placeholder="Drink Name*"
+                placeholderTextColor="#999"
+                value={newDrink.name}
+                onChangeText={(text) => handleChange("name", text)}
+                style={styles.input}
+              />
+              
+              <TouchableOpacity onPress={pickImage} style={styles.imagePickerButton}>
+                {newDrink.img ? (
+                  <Image source={{ uri: newDrink.img }} style={styles.selectedImage} />
+                ) : (
+                  <>
+                    <UploadCloud size={24} color="#6C63FF" />
+                    <Text style={styles.imagePickerText}>Select Drink Image*</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              
+              <TextInput
+                placeholder="Price (₹)*"
+                placeholderTextColor="#999"
+                value={newDrink.price}
+                keyboardType="numeric"
+                onChangeText={(text) => handleChange("price", text)}
+                style={styles.input}
+              />
+              
+              <TextInput
+                placeholder="Discounted Price (₹)"
+                placeholderTextColor="#999"
+                value={newDrink.Dprice}
+                keyboardType="numeric"
+                onChangeText={(text) => handleChange("Dprice", text)}
+                style={styles.input}
+              />
+              
+              {newDrink.Off && (
+                <View style={styles.discountBadge}>
+                  <Text style={styles.discountText}>{newDrink.Off}% OFF</Text>
+                </View>
+              )}
+              
+              <TouchableOpacity 
+                onPress={handleAddDrink} 
+                style={styles.addButton}
+                disabled={loading}
+              >
+                <PlusCircle size={24} color="white" />
+                <Text style={styles.addButtonText}>Add Drink</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
-        {/* ✅ Drink List */}
+        {/* Drink List */}
         {loading ? (
-          <ActivityIndicator size="large" color="#007bff" />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6C63FF" />
+          </View>
+        ) : drinks.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No drinks found. Add your first drink!</Text>
+          </View>
         ) : (
-          <DraggableFlatList data={drinks} keyExtractor={(item) => item._id} renderItem={({ item, drag }) => (
-            <TouchableOpacity onLongPress={drag} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#fff", padding: 10, marginBottom: 10, borderRadius: 8 }}>
-              <Image
-                source={{
-                  uri: item.img.startsWith("http")
-                    ? item.img
-                    : `https://backendforworld.onrender.com${item.img.startsWith("/") ? item.img : "/" + item.img}`,
-                }}
-                style={{ width: 60, height: 60, borderRadius: 8 }}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: "bold" }}>{item.name}</Text>
-                <Text style={{ color: "gray" }}>₹{item.price} | ₹{item.Dprice} | {item.Off}% OFF</Text>
-              </View>
-              <TouchableOpacity onPress={() => handleDeleteDrink(item._id)}>
-                <Trash2 size={24} color="red" />
+          <DraggableFlatList 
+            data={drinks}
+            keyExtractor={(item) => item._id}
+            renderItem={({ item, drag }) => (
+              <TouchableOpacity 
+                onLongPress={drag}
+                style={styles.drinkCard}
+              >
+                <Image
+                  source={{
+                    uri: item.img.startsWith("http")
+                      ? item.img
+                      : `https://backendforworld.onrender.com${item.img.startsWith("/") ? item.img : "/" + item.img}`,
+                  }}
+                  style={styles.drinkImage}
+                />
+                
+                <View style={styles.drinkInfo}>
+                  <Text style={styles.drinkName}>{item.name}</Text>
+                  
+                  <View style={styles.priceContainer}>
+                    {item.Dprice ? (
+                      <>
+                        <Text style={styles.originalPrice}>₹{item.price}</Text>
+                        <Text style={styles.discountedPrice}>₹{item.Dprice}</Text>
+                        {item.Off && (
+                          <View style={styles.drinkDiscountBadge}>
+                            <Text style={styles.drinkDiscountText}>{item.Off}% OFF</Text>
+                          </View>
+                        )}
+                      </>
+                    ) : (
+                      <Text style={styles.regularPrice}>₹{item.price}</Text>
+                    )}
+                  </View>
+                </View>
+                
+                <TouchableOpacity 
+                  onPress={() => handleDeleteDrink(item._id)}
+                  style={styles.deleteButton}
+                >
+                  <Trash2 size={20} color="#FF5252" />
+                </TouchableOpacity>
               </TouchableOpacity>
-            </TouchableOpacity>
-          )} onDragEnd={({ data }) => setDrinks([...data])} style={{ marginTop: 20 }} />
+            )}
+            onDragEnd={({ data }) => setDrinks([...data])}
+            contentContainerStyle={styles.listContent}
+          />
         )}
       </View>
     </GestureHandlerRootView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f8f9fa",
+    padding: 16,
+  },
+  headerText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    color: "#333",
+    marginBottom: 20,
+  },
+  formContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  toggleFormButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+  },
+  toggleFormText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6C63FF",
+  },
+  formContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 16,
+    backgroundColor: "#f9f9f9",
+  },
+  imagePickerButton: {
+    height: 120,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+    backgroundColor: "#f9f9f9",
+    overflow: "hidden",
+  },
+  selectedImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  imagePickerText: {
+    marginTop: 8,
+    color: "#6C63FF",
+    fontWeight: "500",
+  },
+  discountBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFEB3B",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginBottom: 12,
+  },
+  discountText: {
+    color: "#FF9800",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  addButton: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#6C63FF",
+    padding: 14,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: "white",
+    fontWeight: "600",
+    marginLeft: 8,
+    fontSize: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+  },
+  listContent: {
+    paddingBottom: 20,
+  },
+  drinkCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  drinkImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  drinkInfo: {
+    flex: 1,
+  },
+  drinkName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  priceContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  originalPrice: {
+    fontSize: 14,
+    color: "#999",
+    textDecorationLine: "line-through",
+    marginRight: 8,
+  },
+  discountedPrice: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#6C63FF",
+    marginRight: 8,
+  },
+  regularPrice: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#6C63FF",
+  },
+  drinkDiscountBadge: {
+    backgroundColor: "#E8F5E9",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  drinkDiscountText: {
+    color: "#4CAF50",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  deleteButton: {
+    padding: 8,
+  },
+});
 
 export default DrinkManager;

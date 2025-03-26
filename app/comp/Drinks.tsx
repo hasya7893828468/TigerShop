@@ -25,6 +25,7 @@ const Drinks: React.FC = () => {
 
   const router = useRouter();
   const API_URL = "https://backendforworld.onrender.com/api/drinks";
+  const PLACEHOLDER_IMAGE = "https://via.placeholder.com/150"; // Fallback image URL
 
   // Fetch drinks data
   useEffect(() => {
@@ -35,19 +36,17 @@ const Drinks: React.FC = () => {
 
         const allProducts = response.data.map((p: any) => ({
           ...p,
-          img: p.img.startsWith("http")
+          img: p.img && (p.img.startsWith("http") || p.img.startsWith("https"))
             ? p.img
-            : `https://backendforworld.onrender.com/${p.img.replace(/^\/+/, "")}`,
+            : `https://backendforworld.onrender.com/${p.img?.replace(/^\/+/, "")}`,
         }));
 
         console.log("🟢 Processed Product List:", allProducts);
 
         setProductList(allProducts);
-        // Store the fetched data in AsyncStorage
         await AsyncStorage.setItem("cachedDrinks", JSON.stringify(allProducts));
       } catch (error) {
         console.error("❌ Error fetching drinks:", error);
-        // If API fails, try to get data from AsyncStorage
         const cachedData = await AsyncStorage.getItem("cachedDrinks");
         if (cachedData) {
           setProductList(JSON.parse(cachedData));
@@ -90,15 +89,7 @@ const Drinks: React.FC = () => {
     const quantityToAdd = cartQuantities[item._id] ?? 1;
 
     if (quantityToAdd > 0) {
-      const imageUrl = item.img.startsWith("http")
-        ? item.img
-        : `https://backendforworld.onrender.com/${item.img?.replace(/^\/+/, "")}`;
-
-      addToCart({
-        ...item,
-        img: imageUrl,
-        quantity: quantityToAdd,
-      });
+      addToCart({ ...item, quantity: quantityToAdd });
 
       Toast.show({
         type: "success",
@@ -120,7 +111,7 @@ const Drinks: React.FC = () => {
     <View style={styles.container}>
       <NavBar />
       <SearchBar />
-      <HomeCard/>
+      <HomeCard />
       <FlatList
         data={filteredData}
         keyExtractor={(item) => item._id}
@@ -136,13 +127,11 @@ const Drinks: React.FC = () => {
             >
               <Image
                 source={{
-                  uri: item.img && item.img.startsWith("http")
-                    ? item.img
-                    : `https://backendforworld.onrender.com/${item.img.replace(/^\/+/, "")}`,
+                  uri: item.img || PLACEHOLDER_IMAGE,
                 }}
                 style={styles.image}
                 resizeMode="cover"
-                onError={(e) => console.log("❌ Image failed to load:", item.img, e.nativeEvent.error)}
+                onError={() => console.log("❌ Image failed to load:", item.img)}
               />
             </TouchableOpacity>
 
@@ -152,10 +141,12 @@ const Drinks: React.FC = () => {
 
             <View style={styles.priceContainer}>
               <Text style={styles.price}>₹{item.price}</Text>
-              <Text style={styles.discount}>₹{item.Dprice}</Text>
+              {item.Dprice ? <Text style={styles.discount}>₹{item.Dprice}</Text> : null}
             </View>
 
-            <Text style={styles.discountBadge}>{calculateDiscount(item.price, item.Dprice)}% OFF</Text>
+            {item.Dprice ? (
+              <Text style={styles.discountBadge}>{calculateDiscount(item.price, item.Dprice)}% OFF</Text>
+            ) : null}
 
             <View style={styles.controls}>
               <TouchableOpacity onPress={() => handleDecrement(item._id)} style={styles.button}>

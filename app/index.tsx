@@ -1,26 +1,35 @@
-// app/index.tsx
-import { View, Text, Button } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, ActivityIndicator } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import LoginScreen from "./LoginScreen";
+import MainScreen from "./Main"; // Change this to your actual main screen component
 
-export default function HomeScreen() {
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 20 }}>
-        Welcome to the App
-      </Text>
-      <Button title="Go to Login" onPress={() => router.push("/Login")} />
-      <Button title="Go to Sign Up" onPress={() => router.push("/SignUp")} />
-      <Button title="Go to main " onPress={() => router.push("/Main")} />
-      <Button title="Go tovender dash bord " onPress={() => router.push("/Vendor/VendorDashboard")} />
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("userData");
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+          router.replace("/Main");
+        } else {
+          router.replace("/LoginScreen");
+        }
+      } catch (error) {
+        console.error("❌ Error fetching user data:", error);
+      }
+      setLoading(false);
+    };
 
-      <Button title="Go to shoes " onPress={() =>router.push("/comp/SnackManager")} />
-      <Button title="Go to men  " onPress={() => router.push("/comp/DrinkManager")} />
-      <Button title="Go to accessories
-       " onPress={() =>router.push("/comp/GroceryManager")} />
+    checkUser();
+  }, []);
 
+  if (loading) return <ActivityIndicator size="large" color="#0000ff" />;
 
-    </View>
-  );
+  return user ? <MainScreen user={user} /> : <LoginScreen />;
 }
