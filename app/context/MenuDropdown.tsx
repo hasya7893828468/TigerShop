@@ -21,6 +21,9 @@ const MenuDropdown: React.FC = () => {
             <TouchableOpacity onPress={() => { router.push("/LoginScreen"); setIsVisible(false); }} style={styles.menuItem}>
               <Text>Login</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => { router.push("/VendorList"); setIsVisible(false); }} style={styles.menuItem}>
+              <Text>venderpage</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => { router.push("/Logout"); setIsVisible(false); }} style={styles.menuItem}>
               <Text>Logout</Text>
             </TouchableOpacity>

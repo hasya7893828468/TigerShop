@@ -42,8 +42,7 @@ const DrinkDetails: React.FC = () => {
             images: parsedDrink.img 
               ? [
                   parsedDrink.img,
-                  "https://m.media-amazon.com/images/I/71YHh5OQwJL._SL1500_.jpg",
-                  "https://m.media-amazon.com/images/I/71H4+5k4A7L._SL1500_.jpg"
+                 
                 ]
               : []
           });
@@ -131,10 +130,10 @@ const DrinkDetails: React.FC = () => {
           >
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Product Details</Text>
+          {/* <Text style={styles.headerTitle}>Product Details</Text>
           <TouchableOpacity style={styles.cartButton}>
             <FontAwesome name="shopping-cart" size={20} color="#000" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {/* Image Gallery */}
@@ -220,10 +219,10 @@ const DrinkDetails: React.FC = () => {
               <MaterialIcons name="local-offer" size={18} color="#388E3C" />
               <Text style={styles.offerText}>Special Price Get extra 10% off (price inclusive of discount)</Text>
             </View>
-            <View style={styles.offerItem}>
+            {/* <View style={styles.offerItem}>
               <MaterialIcons name="local-offer" size={18} color="#388E3C" />
               <Text style={styles.offerText}>Bank Offer 5% Cashback on Axis Bank Card</Text>
-            </View>
+            </View> */}
           </View>
           
           {/* Quantity Selector */}
@@ -272,7 +271,7 @@ const DrinkDetails: React.FC = () => {
           >
             <Text style={styles.actionButtonText}>Add to Cart</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          {/* <TouchableOpacity 
             style={[styles.actionButton, styles.buyNowButton]}
             onPress={handleBuyNow}
           >
@@ -282,9 +281,8 @@ const DrinkDetails: React.FC = () => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={[styles.actionButtonText, { color: '#000' }]}>Buy Now</Text>
             </LinearGradient>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       )}
 

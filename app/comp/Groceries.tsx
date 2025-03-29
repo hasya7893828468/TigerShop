@@ -18,7 +18,12 @@ import NavBar from "../context/NavBar";
 import SearchBar from "../context/SearchBar";
 import HomeCard from "./HomeCard";
 import Toast from "react-native-toast-message";
+import { Dimensions } from "react-native";
 
+const { width } = Dimensions.get("window");
+
+const IMAGE_WIDTH = width * 0.45; // Adjust size dynamically (45% of screen width)
+const IMAGE_HEIGHT = IMAGE_WIDTH * 0.9; // Maintain aspect ratio
 const Groceries: React.FC = () => {
   const { addToCart, searchValue } = useAppContext();
   const [productList, setProductList] = useState<any[]>([]);
@@ -211,7 +216,8 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     marginHorizontal: 20,
   },
-  image: { width: 190, height: 150, borderRadius: 8 },
+  image: {   width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT, borderRadius: 8 },
   name: { fontSize: 14, fontWeight: "bold", marginTop: 8, textAlign: "center" },
   priceContainer: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   price: { fontSize: 20, fontWeight: "bold", color: "green", marginRight: 6 },

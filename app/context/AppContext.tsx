@@ -50,6 +50,8 @@ interface AppContextProps {
   toggleTheme: () => void;
   preferences: UserPreferences;
   updatePreferences: (newPreferences: Partial<UserPreferences>) => void;
+  isLoading: boolean;
+  isReady: boolean;
 }
 
 // ✅ Create Context
@@ -59,22 +61,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [user, setUser] = useState<User | null>(null);
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [tempCart, setTempCart] = useState<CartItem[]>([]); // For guest users
   const [searchValue, setSearchValue] = useState("");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: 'system',
     language: 'en',
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
   
   const API_URL = "https://backendforworld.onrender.com/api";
   const isDataLoaded = useRef(false);
 
-  // Calculate cart item count
-  const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
+  // Calculate cart item count (combines both logged-in cart and temp cart)
+  const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0) + 
+                       tempCart.reduce((total, item) => total + item.quantity, 0);
 
   // ✅ Helper function to get storage keys
   const getCartStorageKey = (userId: string) => `cart_${userId}`;
   const getPreferencesKey = (userId: string) => `preferences_${userId}`;
+  const getGuestCartKey = () => `guest_cart`;
+
+  // ✅ Merge temp cart with user cart when user logs in
+  useEffect(() => {
+    if (user && tempCart.length > 0) {
+      setCart(prevCart => {
+        const mergedCart = [...prevCart];
+        
+        tempCart.forEach(tempItem => {
+          const existingItem = mergedCart.find(item => item._id === tempItem._id);
+          if (existingItem) {
+            existingItem.quantity += tempItem.quantity;
+          } else {
+            mergedCart.push(tempItem);
+          }
+        });
+
+        return mergedCart;
+      });
+      
+      setTempCart([]);
+      AsyncStorage.removeItem(getGuestCartKey());
+    }
+  }, [user, tempCart]);
 
   // ✅ Load User Data, Preferences, and Cart from AsyncStorage & Backend
   useEffect(() => {
@@ -82,11 +112,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     isDataLoaded.current = true;
 
     const fetchData = async () => {
+      setIsLoading(true);
       try {
-        // Check for existing auth token first
+        // First load guest cart if exists
+        const guestCart = await AsyncStorage.getItem(getGuestCartKey());
+        if (guestCart) {
+          setTempCart(JSON.parse(guestCart));
+        }
+
+        // Check for existing auth token
         const token = await AsyncStorage.getItem("authToken");
         if (!token) {
           console.log("❌ No auth token found - user not logged in");
+          setIsReady(true);
+          setIsLoading(false);
           return;
         }
 
@@ -94,6 +133,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const storedUserId = await AsyncStorage.getItem("userId");
         if (!storedUserId) {
           console.warn("⚠️ No userId found in AsyncStorage!");
+          setIsReady(true);
+          setIsLoading(false);
           return;
         }
 
@@ -114,7 +155,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         const fetchedUser = userResponse.data;
         setUser(fetchedUser);
-
+        
         // Update storage with fresh data
         await AsyncStorage.setItem("userData", JSON.stringify(fetchedUser));
         await AsyncStorage.setItem("userId", fetchedUser._id);
@@ -134,7 +175,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
 
-        // ✅ Load user-specific cart (auto-recovery)
+        // ✅ Load user-specific cart
         const storedCart = await AsyncStorage.getItem(getCartStorageKey(fetchedUser._id));
         if (storedCart) {
           setCart(JSON.parse(storedCart));
@@ -150,6 +191,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (error?.response?.status === 401) {
           await AsyncStorage.removeItem("authToken");
         }
+      } finally {
+        setIsLoading(false);
+        setIsReady(true);
       }
     };
 
@@ -166,11 +210,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [preferences.theme]);
 
-  // ✅ Store cart in AsyncStorage per user
+  // ✅ Store cart in AsyncStorage
   const saveCartToStorage = async (updatedCart: CartItem[]) => {
-    if (!user) return;
     try {
-      await AsyncStorage.setItem(getCartStorageKey(user._id), JSON.stringify(updatedCart));
+      if (user) {
+        await AsyncStorage.setItem(getCartStorageKey(user._id), JSON.stringify(updatedCart));
+      } else {
+        await AsyncStorage.setItem(getGuestCartKey(), JSON.stringify(updatedCart));
+      }
     } catch (error) {
       console.error("❌ Error saving cart:", error);
     }
@@ -186,32 +233,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // ✅ Add Item to Cart (per user)
+  // ✅ Add Item to Cart (handles both logged-in and guest users)
   const addToCart = useCallback((item: CartItem) => {
-    if (!user) {
+    if (isLoading) {
       Toast.show({
-        type: 'error',
-        text1: 'Login Required',
-        text2: 'Please login to add items to cart',
+        type: 'info',
+        text1: 'Please wait',
+        text2: 'App is initializing',
       });
       return;
     }
-    
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((cartItem) => cartItem._id === item._id);
-      const updatedCart = existingItem
-        ? prevCart.map((cartItem) =>
+
+    const operation = (prevItems: CartItem[]) => {
+      const existingItem = prevItems.find((cartItem) => cartItem._id === item._id);
+      const updatedItems = existingItem
+        ? prevItems.map((cartItem) =>
             cartItem._id === item._id
               ? { ...cartItem, quantity: cartItem.quantity + item.quantity }
               : cartItem
           )
-        : [...prevCart, item];
+        : [...prevItems, item];
 
-      saveCartToStorage(updatedCart);
-      return updatedCart;
-    });
+      saveCartToStorage(updatedItems);
+      return updatedItems;
+    };
 
-    // ✅ Show toast notification
+    if (user) {
+      setCart(operation);
+    } else {
+      setTempCart(operation);
+    }
+
     Toast.show({
       type: "success",
       text1: "✅ Added to Cart",
@@ -219,16 +271,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       visibilityTime: 2000,
       position: "bottom",
     });
-  }, [user]);
+  }, [user, isLoading]);
 
-  // ✅ Remove Item from Cart (per user)
+  // ✅ Remove Item from Cart
   const removeFromCart = useCallback((itemId: string) => {
-    if (!user) return;
-    setCart((prevCart) => {
-      const updatedCart = prevCart.filter((item) => item._id !== itemId);
-      saveCartToStorage(updatedCart);
-      return updatedCart;
-    });
+    if (isLoading) return;
+
+    const operation = (prevItems: CartItem[]) => {
+      const updatedItems = prevItems.filter((item) => item._id !== itemId);
+      saveCartToStorage(updatedItems);
+      return updatedItems;
+    };
+
+    if (user) {
+      setCart(operation);
+    } else {
+      setTempCart(operation);
+    }
 
     Toast.show({
       type: "success",
@@ -236,19 +295,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       text2: "Item removed from cart",
       visibilityTime: 1500,
     });
-  }, [user]);
+  }, [user, isLoading]);
 
-  // ✅ Update Cart Quantity (per user)
+  // ✅ Update Cart Quantity
   const updateCartQuantity = useCallback((id: string, newQuantity: number) => {
-    if (!user) return;
-    setCart((prevCart) => {
-      const updatedCart = prevCart.map((item) =>
+    if (isLoading) return;
+
+    const operation = (prevItems: CartItem[]) => {
+      const updatedItems = prevItems.map((item) =>
         item._id === id ? { ...item, quantity: newQuantity } : item
       );
-      saveCartToStorage(updatedCart);
+      saveCartToStorage(updatedItems);
       
-      // Show toast if quantity changed
-      const changedItem = updatedCart.find(item => item._id === id);
+      const changedItem = updatedItems.find(item => item._id === id);
       if (changedItem) {
         Toast.show({
           type: 'info',
@@ -258,9 +317,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       
-      return updatedCart;
-    });
-  }, [user]);
+      return updatedItems;
+    };
+
+    if (user) {
+      setCart(operation);
+    } else {
+      setTempCart(operation);
+    }
+  }, [user, isLoading]);
 
   // ✅ Toggle theme between light/dark
   const toggleTheme = useCallback(() => {
@@ -277,7 +342,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setPreferences(updatedPrefs);
     savePreferences(updatedPrefs);
     
-    // Handle theme changes immediately
     if (newPreferences.theme !== undefined) {
       if (newPreferences.theme === 'dark') {
         setIsDarkMode(true);
@@ -289,17 +353,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [preferences]);
 
-  // ✅ Place Order (per user)
+  // ✅ Place Order
   const handleOrderNow = async () => {
-    if (!user) return Alert.alert("⚠️ Error", "User not found!");
+    if (!user) {
+      Alert.alert("⚠️ Login Required", "Please login to place an order");
+      return;
+    }
+
+    if (isLoading) return;
 
     try {
       console.log("📡 Connecting to API:", API_URL);
 
-      const storedCart = await AsyncStorage.getItem(getCartStorageKey(user._id));
-      const cartItems = storedCart ? JSON.parse(storedCart) : [];
-
-      if (!cartItems.length) {
+      const currentCart = [...cart];
+      if (currentCart.length === 0) {
         Toast.show({
           type: 'error',
           text1: 'Empty Cart',
@@ -324,7 +391,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       await AsyncStorage.setItem("userLocation", JSON.stringify(userLocation));
 
-      const grandTotal = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
+      const grandTotal = currentCart.reduce((total, item) => total + item.price * item.quantity, 0);
       const vendorId = "67dbc243153a18be6ef0c5f0";
 
       console.log("🛒 Final Order Data:", {
@@ -335,7 +402,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         phone: user.phone,
         address: user.address,
         userLocation,
-        cartItems,
+        cartItems: currentCart,
         grandTotal,
         status: "Pending",
       });
@@ -348,7 +415,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         phone: user.phone,
         address: user.address,
         userLocation,
-        cartItems,
+        cartItems: currentCart,
         grandTotal,
         status: "Pending",
       });
@@ -372,11 +439,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  // Combine user cart and temp cart for display
+  const displayCart = user ? cart : tempCart;
+
   return (
     <AppContext.Provider value={{
       user, 
       vendorId, 
-      cart, 
+      cart: displayCart, 
       addToCart, 
       removeFromCart, 
       updateCartQuantity, 
@@ -388,6 +458,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       toggleTheme,
       preferences,
       updatePreferences,
+      isLoading,
+      isReady,
     }}>
       {children}
     </AppContext.Provider>

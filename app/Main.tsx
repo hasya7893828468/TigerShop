@@ -20,6 +20,12 @@ import SearchBar from "./context/SearchBar";
 import HomeCard from "./comp/HomeCard";
 import Toast from "react-native-toast-message";
 
+import { Dimensions } from "react-native";
+
+const { width } = Dimensions.get("window");
+
+const IMAGE_WIDTH = width * 0.45; // Adjust size dynamically (45% of screen width)
+const IMAGE_HEIGHT = IMAGE_WIDTH * 0.9; // Maintain aspect ratio
 interface Product {
   _id: string;
   name: string;
@@ -246,7 +252,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  image: { width: 190, height: 170, borderRadius: 8 },
+  image: {
+    width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT,
+    borderRadius: 8
+  },
   name: { fontSize: 14, fontWeight: "bold", textAlign: "center", width: "90%" },
   priceContainer: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   discountBadge: { fontSize: 12, color: "red", fontWeight: "bold" },
