@@ -22,7 +22,7 @@ import { Dimensions } from "react-native";
 const { width } = Dimensions.get("window");
 
 const IMAGE_WIDTH = width * 0.45; // Adjust size dynamically (45% of screen width)
-const IMAGE_HEIGHT = IMAGE_WIDTH * 0.9; // Maintain aspect ratio
+const IMAGE_HEIGHT = IMAGE_WIDTH * 1.1;
 
 const Snacks: React.FC = () => {
   const { addToCart, searchValue } = useAppContext();
@@ -92,9 +92,14 @@ const Snacks: React.FC = () => {
   };
 
   const calculateDiscount = (originalPrice: number, discountedPrice: number) => {
-    if (originalPrice <= 0 || discountedPrice <= 0 || discountedPrice < originalPrice) return 0;
-    return Math.abs(Math.round(((originalPrice - discountedPrice) / originalPrice) * 100));
-  };
+    if (originalPrice <= 0 || discountedPrice <= 0) return 0;
+
+    // Ensure originalPrice is always the higher value
+    const actualOriginal = Math.max(originalPrice, discountedPrice);
+    const actualDiscounted = Math.min(originalPrice, discountedPrice);
+
+    return Math.round(((actualOriginal - actualDiscounted) / actualOriginal) * 100);
+};
 
   return (
     <View style={styles.container}>
@@ -194,7 +199,8 @@ const styles = StyleSheet.create({
     width: IMAGE_WIDTH,
     height: IMAGE_HEIGHT,
     borderRadius: 8,
-  },  name: { fontSize: 14, fontWeight: "bold", marginTop: 8, textAlign: "center" },
+  },
+  name: { fontSize: 14, fontWeight: "bold", textAlign: "center", width: "70%", marginTop:10 },
   priceContainer: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   price: { fontSize: 20, fontWeight: "bold", color: "green", marginRight: 6 },
   discount: { fontSize: 12, color: "gray", textDecorationLine: "line-through" },
