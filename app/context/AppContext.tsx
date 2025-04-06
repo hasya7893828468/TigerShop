@@ -109,76 +109,74 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // ✅ Load User Data, Preferences, and Cart from AsyncStorage & Backend
   useEffect(() => {
     if (isDataLoaded.current) return;
-    isDataLoaded.current = true;
-
+  
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // First load guest cart if exists
+        isDataLoaded.current = true;
+        console.log("🟠 Initializing app...");
+  
+        // Load guest cart (before user check)
         const guestCart = await AsyncStorage.getItem(getGuestCartKey());
         if (guestCart) {
+          console.log("🛒 Guest cart found in AsyncStorage");
           setTempCart(JSON.parse(guestCart));
         }
-
-        // Check for existing auth token
+  
         const token = await AsyncStorage.getItem("authToken");
-        if (!token) {
-          console.log("❌ No auth token found - user not logged in");
-          setIsReady(true);
-          setIsLoading(false);
-          return;
-        }
-
-        // Load user ID from storage
         const storedUserId = await AsyncStorage.getItem("userId");
-        if (!storedUserId) {
-          console.warn("⚠️ No userId found in AsyncStorage!");
-          setIsReady(true);
+  
+        if (!token || !storedUserId) {
+          console.log("❌ No auth token or userId found - user not logged in");
+          setUser(null);
           setIsLoading(false);
+          setIsReady(true);
           return;
         }
-
+  
         console.log("🟢 Found userId:", storedUserId);
-
-        // Try to load user data from storage first
+  
+        // Load cached user data first
         const storedUserData = await AsyncStorage.getItem("userData");
         if (storedUserData) {
           const parsedUser = JSON.parse(storedUserData);
           setUser(parsedUser);
-          console.log("🟢 Loaded user data from cache");
+          console.log("📦 Using cached user data:", parsedUser);
         }
-
+  
         // Fetch fresh user data from backend
         const userResponse = await axios.get(`${API_URL}/auth/user/${storedUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
+  
         const fetchedUser = userResponse.data;
         setUser(fetchedUser);
-        
-        // Update storage with fresh data
+        console.log("✅ Fetched user data from API:", fetchedUser);
+  
+        // Update AsyncStorage with latest user data
         await AsyncStorage.setItem("userData", JSON.stringify(fetchedUser));
         await AsyncStorage.setItem("userId", fetchedUser._id);
-
-        console.log("🟢 User Data Loaded:", fetchedUser);
-
-        // ✅ Load user preferences
+  
+        // Load user preferences
         const storedPrefs = await AsyncStorage.getItem(getPreferencesKey(fetchedUser._id));
         if (storedPrefs) {
           const parsedPrefs = JSON.parse(storedPrefs);
           setPreferences(parsedPrefs);
-          // Apply theme preference
-          if (parsedPrefs.theme === 'dark' || (parsedPrefs.theme === 'system' && Appearance.getColorScheme() === 'dark')) {
+          if (
+            parsedPrefs.theme === 'dark' ||
+            (parsedPrefs.theme === 'system' && Appearance.getColorScheme() === 'dark')
+          ) {
             setIsDarkMode(true);
           } else {
             setIsDarkMode(false);
           }
         }
-
-        // ✅ Load user-specific cart
+  
+        // Load cart from storage
         const storedCart = await AsyncStorage.getItem(getCartStorageKey(fetchedUser._id));
         if (storedCart) {
           setCart(JSON.parse(storedCart));
+          console.log("🛒 Cart restored from AsyncStorage");
           Toast.show({
             type: 'info',
             text1: 'Cart Restored',
@@ -186,19 +184,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           });
         }
       } catch (error) {
-        console.error("❌ Error fetching data:", error?.response?.data || error);
-        // If there's an auth error, clear the token
+        console.error("❌ Error during initialization:", error?.response?.data || error);
         if (error?.response?.status === 401) {
-          await AsyncStorage.removeItem("authToken");
+          console.warn("🔒 Token expired or invalid, logging out user...");
+          await AsyncStorage.multiRemove(["authToken", "userId", "userData"]);
+          setUser(null);
         }
       } finally {
+        console.log("✅ Initialization complete");
         setIsLoading(false);
         setIsReady(true);
       }
     };
-
+  
     fetchData();
   }, []);
+  useEffect(() => {
+    const loadUser = async () => {
+      const userData = await AsyncStorage.getItem("userData");
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
+    };
+  
+    loadUser();
+  }, []);
+  
+  
 
   // ✅ Handle system theme changes
   useEffect(() => {
@@ -235,35 +247,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // ✅ Add Item to Cart (handles both logged-in and guest users)
   const addToCart = useCallback((item: CartItem) => {
-    if (isLoading) {
+    console.log("🛒 Attempting to add item:", item);
+    console.log("👤 User:", user);
+    console.log("⏳ isLoading:", isLoading);
+    console.log("🟢 isReady:", isReady);
+  
+    if (isLoading || !isReady) {
+      console.warn("⏳ App not ready yet, blocking cart interaction");
       Toast.show({
-        type: 'info',
-        text1: 'Please wait',
-        text2: 'App is initializing',
+        type: "info",
+        text1: "Please wait",
+        text2: "App is initializing",
       });
       return;
     }
-
+  
+    // ✅ Updated login check to support both `id` and `_id`
+    const userId = user?._id || user?.id;
+    if (!user || !userId) {
+      console.warn("🚫 User not logged in - blocking cart action.");
+      Toast.show({
+        type: "error",
+        text1: "Login Required",
+        text2: "Please log in to add items to the cart.",
+      });
+      return;
+    }
+  
     const operation = (prevItems: CartItem[]) => {
-      const existingItem = prevItems.find((cartItem) => cartItem._id === item._id);
+      const existingItem = prevItems.find(
+        (cartItem) => cartItem._id === item._id && cartItem.userId === userId
+      );
+  
       const updatedItems = existingItem
         ? prevItems.map((cartItem) =>
-            cartItem._id === item._id
+            cartItem._id === item._id && cartItem.userId === userId
               ? { ...cartItem, quantity: cartItem.quantity + item.quantity }
               : cartItem
           )
-        : [...prevItems, item];
-
+        : [...prevItems, { ...item, userId }];
+  
       saveCartToStorage(updatedItems);
       return updatedItems;
     };
-
-    if (user) {
-      setCart(operation);
-    } else {
-      setTempCart(operation);
-    }
-
+  
+    setCart(operation);
+  
     Toast.show({
       type: "success",
       text1: "✅ Added to Cart",
@@ -271,7 +300,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       visibilityTime: 2000,
       position: "bottom",
     });
-  }, [user, isLoading]);
+  }, [user, isLoading, isReady, setCart]);
+  
+  
+
+  useEffect(() => {
+    console.log("👀 User updated:", user);
+    console.log("🟢 isReady updated:", isReady);
+  }, [user, isReady]);
+  
+
 
   // ✅ Remove Item from Cart
   const removeFromCart = useCallback((itemId: string) => {
@@ -355,96 +393,121 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // ✅ Place Order
   const handleOrderNow = async () => {
-    if (!user) {
-      Alert.alert("⚠️ Login Required", "Please login to place an order");
-      return;
-    }
-
     if (isLoading) return;
 
     try {
-      console.log("📡 Connecting to API:", API_URL);
+        console.log("📡 Connecting to API:", API_URL);
 
-      const currentCart = [...cart];
-      if (currentCart.length === 0) {
-        Toast.show({
-          type: 'error',
-          text1: 'Empty Cart',
-          text2: 'Your cart is empty',
+        // Check user authentication
+        const token = await AsyncStorage.getItem("authToken");
+        if (!token) {
+            Alert.alert("⚠️ Authentication Error", "Please log in to place an order.");
+            return;
+        }
+
+        // Fetch fresh user data to ensure correct userId
+        const storedUserId = await AsyncStorage.getItem("userId");
+        if (!storedUserId) {
+            Alert.alert("⚠️ User Data Missing", "Please log in again.");
+            return;
+        }
+
+        const userResponse = await axios.get(`${API_URL}/auth/user/${storedUserId}`, {
+            headers: { Authorization: `Bearer ${token}` },
         });
-        return;
-      }
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("⚠️ Location Permission", "Please enable location services.");
-        return;
-      }
+        const user = userResponse.data;
+        console.log("✅ Fresh User Data:", user);
 
-      const location = await Location.getCurrentPositionAsync({});
-      const userLocation = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
+        const currentCart = [...cart];
+        if (currentCart.length === 0) {
+            Toast.show({
+                type: 'error',
+                text1: 'Empty Cart',
+                text2: 'Your cart is empty',
+            });
+            return;
+        }
 
-      console.log("🗺️ User Location:", userLocation);
+        // Request location permissions
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+            Alert.alert("⚠️ Location Permission", "Please enable location services.");
+            return;
+        }
 
-      await AsyncStorage.setItem("userLocation", JSON.stringify(userLocation));
+        // Get the current location
+        let location;
+        try {
+            location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Highest,  // Maximum precision
+                timeout: 10000,  // 10 seconds timeout
+            });
+        } catch (err) {
+            console.error("❌ Location Fetch Error:", err);
+            Alert.alert("⚠️ Location Error", "Unable to fetch your location. Try again.");
+            return;
+        }
 
-      const grandTotal = currentCart.reduce((total, item) => total + item.price * item.quantity, 0);
-      const vendorId = "67dbc243153a18be6ef0c5f0";
+        const userLocation = {
+            latitude: parseFloat(location.coords.latitude.toFixed(8)),  // 8 decimal places
+            longitude: parseFloat(location.coords.longitude.toFixed(8)),
+        };
 
-      console.log("🛒 Final Order Data:", {
-        userId: user._id,
-        userName: user.name,
-        vendorId,
-        name: user.name,
-        phone: user.phone,
-        address: user.address,
-        userLocation,
-        cartItems: currentCart,
-        grandTotal,
-        status: "Pending",
-      });
+        console.log("🗺️ User Location:", userLocation);
 
-      const response = await axios.post(`${API_URL}/orders/add-order`, {
-        userId: user._id,
-        userName: user.name,
-        vendorId,
-        name: user.name,
-        phone: user.phone,
-        address: user.address,
-        userLocation,
-        cartItems: currentCart,
-        grandTotal,
-        status: "Pending",
-      });
+        // Store the location in AsyncStorage for future reference
+        await AsyncStorage.setItem("userLocation", JSON.stringify(userLocation));
 
-      if (response.status === 201) {
-        Toast.show({
-          type: 'success',
-          text1: 'Order Placed!',
-          text2: 'Your order has been submitted successfully',
-        });
-        setCart([]);
-        await AsyncStorage.removeItem(getCartStorageKey(user._id));
-      }
+        const grandTotal = currentCart.reduce((total, item) => total + item.price * item.quantity, 0);
+        const vendorId = "67dbc243153a18be6ef0c5f0";
+
+        const orderData = {
+            userId: user._id,
+            userName: user.name,
+            vendorId,
+            name: user.name,
+            phone: user.phone,
+            address: user.address,
+            userLocation,
+            cartItems: currentCart,
+            grandTotal,
+            status: "Pending",
+        };
+
+        console.log("🛒 Final Order Data:", orderData);
+
+        const response = await axios.post(`${API_URL}/orders/add-order`, orderData);
+
+        if (response.status === 201) {
+            Toast.show({
+                type: 'success',
+                text1: 'Order Placed!',
+                text2: 'Your order has been submitted successfully',
+            });
+
+            setCart([]);
+            await AsyncStorage.removeItem(getCartStorageKey(user._id));
+        }
     } catch (error) {
-      console.error("❌ Order Placement Error:", error);
-      Toast.show({
-        type: 'error',
-        text1: 'Order Failed',
-        text2: 'Could not place order. Please try again.',
-      });
+        console.error("❌ Order Placement Error:", error);
+        Toast.show({
+            type: 'error',
+            text1: 'Order Failed',
+            text2: 'Could not place order. Please try again.',
+        });
     }
-  };
+};
+
+
+
 
   // Combine user cart and temp cart for display
   const displayCart = user ? cart : tempCart;
 
   return (
     <AppContext.Provider value={{
-      user, 
+      user, setUser,
       vendorId, 
       cart: displayCart, 
       addToCart, 

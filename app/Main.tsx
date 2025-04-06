@@ -88,6 +88,7 @@ const Main: React.FC = () => {
       val?.name?.toLowerCase().includes((searchValue ?? "").toLowerCase())
     );
   }, [productList, searchValue]);
+  
 
   const handleIncrement = (id: string) => {
     setCartQuantities((prev) => ({ ...prev, [id]: (prev[id] ?? 1) + 1 }));
@@ -182,6 +183,7 @@ const Main: React.FC = () => {
     <View style={styles.container}>
       <NavBar />
       <SearchBar />
+      
       <HomeCard />
       <FlatList
         data={filteredData}

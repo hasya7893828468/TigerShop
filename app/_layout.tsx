@@ -5,12 +5,12 @@ import AppProvider from "./context/AppContext"; // ✅ Context Wrapper
 
 export default function Layout() {
   return (
-    // <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AppProvider>
           <Slot />
         </AppProvider>
       </SafeAreaProvider>
-    // </GestureHandlerRootView>
+    </GestureHandlerRootView>
   );
 }

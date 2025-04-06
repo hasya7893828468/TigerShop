@@ -9,7 +9,7 @@ interface OrderItem {
   price: number;
   quantity: number;
   totalPrice: number;
-  img: string;
+  img?: string;
 }
 
 interface Order {
@@ -18,6 +18,7 @@ interface Order {
   userName: string;
   status: string;
   cartItems: OrderItem[];
+  grandTotal?: number;
 }
 
 interface OrderListProps {
@@ -27,78 +28,87 @@ interface OrderListProps {
 const OrderList: React.FC<OrderListProps> = ({ orders = [] }) => {
   const router = useRouter();
 
+  const getImageUrl = (img?: string) => {
+    if (!img) return "https://via.placeholder.com/150";
+    if (img.startsWith("http")) return img;
+    return `https://backendforworld.onrender.com${img.startsWith("/") ? img : `/${img}`}`;
+  };
+
   if (!Array.isArray(orders)) {
     console.error("❌ Invalid orders:", orders);
     return <Text style={styles.errorText}>Error loading orders.</Text>;
   }
 
+  const renderOrderItem = ({ item }: { item: OrderItem }) => (
+    <TouchableOpacity
+      onPress={async () => {
+        try {
+          await AsyncStorage.setItem(
+            "selectedProduct",
+            JSON.stringify({
+              _id: item._id,
+              name: item.name,
+              price: item.price,
+              img: item.img,
+            })
+          );
+          router.push("/Card");
+        } catch (error) {
+          console.error("❌ Error saving product:", error);
+        }
+      }}
+    >
+      <View style={styles.itemContainer}>
+        <Image
+          source={{ uri: getImageUrl(item.img) }}
+          style={styles.itemImage}
+          onError={(e) => console.log("Failed to load image:", e.nativeEvent.error)}
+        />
+        <View style={styles.itemDetails}>
+          <Text style={styles.itemName}>{item.name}</Text>
+          <Text style={styles.itemPrice}>₹{item.price} x {item.quantity}</Text>
+        </View>
+        <Text style={styles.totalPrice}>₹{item.totalPrice}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderOrder = ({ item }: { item: Order }) => (
+    <View style={styles.orderContainer}>
+      <Text style={styles.orderTitle}>📦 Order ID: {item._id}</Text>
+      <Text style={styles.orderDate}>
+        📅 {item.createdAt ? new Date(item.createdAt).toLocaleString() : "Date Unavailable"}
+      </Text>
+      <Text style={styles.userName}>👤 {item.userName || "Guest User"}</Text>
+
+      <FlatList
+        data={item.cartItems}
+        keyExtractor={(item) => item._id || Math.random().toString()}
+        renderItem={renderOrderItem}
+        ListEmptyComponent={<Text style={styles.noItems}>No items in this order.</Text>}
+      />
+
+      <View style={styles.totalContainer}>
+        <Text style={styles.totalText}>
+          🛍️ Total:{" "}
+          <Text style={styles.totalAmount}>
+            ₹{item.grandTotal ? item.grandTotal.toFixed(2) : 
+              item.cartItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)}
+          </Text>
+        </Text>
+      </View>
+
+      <Text style={[styles.status, item.status === "Completed" ? styles.completed : styles.pending]}>
+        Status: {item.status}
+      </Text>
+    </View>
+  );
+
   return (
     <FlatList
       data={orders}
-      keyExtractor={(order) => order._id}
-      renderItem={({ item: order }) => (
-        <View style={styles.orderContainer}>
-          <Text style={styles.orderTitle}>📦 Order ID: {order._id}</Text>
-          <Text style={styles.orderDate}>
-            📅 {order.createdAt ? new Date(order.createdAt).toLocaleString() : "Date Unavailable"}
-          </Text>
-          <Text style={styles.userName}>👤 {order.userName || "Guest User"}</Text>
-
-          {/* Order Items */}
-          <FlatList
-            data={order.cartItems}
-            keyExtractor={(item) => item._id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={async () => {
-                  try {
-                    await AsyncStorage.setItem(
-                      "selectedProduct",
-                      JSON.stringify({
-                        _id: item._id,
-                        name: item.name,
-                        price: item.price,
-                        img: item.img,
-                      })
-                    );
-                    router.push("/Card"); // ✅ Navigate to ProductDetails
-                  } catch (error) {
-                    console.error("❌ Error saving product:", error);
-                  }
-                }}
-              >
-                <View style={styles.itemContainer}>
-                  <Image
-                    source={{ uri: item.img.startsWith("http") ? item.img : `https://backendforworld.onrender.com${item.img}` }}
-                    style={styles.itemImage}
-                  />
-                  <View style={styles.itemDetails}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    <Text style={styles.itemPrice}>₹{item.price} x {item.quantity}</Text>
-                  </View>
-                  <Text style={styles.totalPrice}>₹{item.totalPrice}</Text>
-                </View>
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={<Text style={styles.noItems}>No items in this order.</Text>}
-          />
-
-          {/* Order Total */}
-          <View style={styles.totalContainer}>
-            <Text style={styles.totalText}>
-              🛍️ Total:{" "}
-              <Text style={styles.totalAmount}>
-                ₹{order.cartItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)}
-              </Text>
-            </Text>
-          </View>
-
-          {/* Order Status */}
-          <Text style={[styles.status, order.status === "Completed" ? styles.completed : styles.pending]}>
-            Status: {order.status}
-          </Text>
-        </View>
-      )}
+      keyExtractor={(item) => item._id || Math.random().toString()}
+      renderItem={renderOrder}
       ListEmptyComponent={<Text style={styles.noOrders}>No orders found.</Text>}
     />
   );

@@ -125,6 +125,114 @@ const PendingOrders: React.FC = () => {
     );
   }
 
+  const renderProductItem = ({ item: product }) => (
+    <View key={`product-${product._id || Math.random().toString()}`} style={styles.productItem}>
+      <Image 
+        source={{ uri: product.img.startsWith("http") ? product.img : `https://backendforworld.onrender.com/${product.img.replace(/^\/+/, "")}` }} 
+        style={styles.productImage} 
+      />
+      <View style={styles.productDetails}>
+        <Text style={styles.productName}>{product.name}</Text>
+        <Text style={styles.productPrice}>₹{product.price} × {product.quantity}</Text>
+      </View>
+      <Text style={styles.productTotal}>₹{(product.price * product.quantity).toFixed(2)}</Text>
+    </View>
+  );
+
+  const renderOrderItem = ({ item }) => {
+    const totalAmount = item.cartItems.reduce((acc, product) => acc + (product.price * product.quantity), 0);
+    const orderDate = new Date(item.createdAt);
+    const formattedDate = `${orderDate.toLocaleDateString()} at ${orderDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+
+    return (
+      <View key={`order-${item._id}`} style={styles.orderCard}>
+        <View style={styles.orderHeader}>
+          <View style={styles.orderIdContainer}>
+            <Text style={styles.orderId}>Order #{item._id.slice(-6).toUpperCase()}</Text>
+            <Text style={styles.orderDate}>{formattedDate}</Text>
+          </View>
+          <View style={styles.orderStatus}>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusText}>PENDING</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.customerInfo}>
+          <View style={styles.customerAvatar}>
+            <FontAwesome name="user" size={20} color="#6C63FF" />
+          </View>
+          <View style={styles.customerDetails}>
+            <Text style={styles.customerName}>{item.userName || "Customer"}</Text>
+            <View style={styles.contactRow}>
+              <TouchableOpacity 
+                style={styles.contactButton} 
+                onPress={() => item.phone && Linking.openURL(`tel:${item.phone}`)}
+              >
+                <Entypo name="phone" size={16} color="#6C63FF" />
+                <Text style={styles.contactText}>{item.phone || "No phone"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.contactButton} 
+                onPress={() => item.phone && Linking.openURL(`sms:${item.phone}`)}
+              >
+                <MaterialIcons name="sms" size={16} color="#6C63FF" />
+                <Text style={styles.contactText}>SMS</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Delivery Address</Text>
+          <Text style={styles.addressText}>{item.address || "No address provided"}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Order Items</Text>
+          <FlatList
+            data={item.cartItems}
+            renderItem={renderProductItem}
+            keyExtractor={(product) => `product-${product._id || Math.random().toString()}`}
+          />
+        </View>
+
+        <View style={styles.totalContainer}>
+          <Text style={styles.totalLabel}>Order Total:</Text>
+          <Text style={styles.totalAmount}>₹{totalAmount.toFixed(2)}</Text>
+        </View>
+
+        <View style={styles.actionButtons}>
+          {item.userLocation?.latitude && item.userLocation?.longitude && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.locationButton]}
+              onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.userLocation.latitude},${item.userLocation.longitude}`)}
+            >
+              <Ionicons name="location-sharp" size={18} color="white" />
+              <Text style={styles.actionButtonText}>Customer Location</Text>
+            </TouchableOpacity>
+          )}
+          
+          <TouchableOpacity
+            style={[styles.actionButton, styles.whatsappButton]}
+            onPress={() => sendWhatsAppBill(item)}
+          >
+            <FontAwesome name="whatsapp" size={18} color="white" />
+            <Text style={styles.actionButtonText}>Send Bill</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.completeButton]}
+            onPress={() => handleCompleteOrder(item._id)}
+          >
+            <MaterialIcons name="check-circle" size={18} color="white" />
+            <Text style={styles.actionButtonText}>Complete</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -165,117 +273,20 @@ const PendingOrders: React.FC = () => {
       ) : (
         <FlatList
           data={pendingOrders}
-          keyExtractor={(order) => order._id}
+          keyExtractor={(order) => `order-${order._id}`}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => {
-            const totalAmount = item.cartItems.reduce((acc, product) => acc + (product.price * product.quantity), 0);
-            const orderDate = new Date(item.createdAt);
-            const formattedDate = `${orderDate.toLocaleDateString()} at ${orderDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-
-            return (
-              <View style={styles.orderCard}>
-                <View style={styles.orderHeader}>
-                  <View style={styles.orderIdContainer}>
-                    <Text style={styles.orderId}>Order #{item._id.slice(-6).toUpperCase()}</Text>
-                    <Text style={styles.orderDate}>{formattedDate}</Text>
-                  </View>
-                  <View style={styles.orderStatus}>
-                    <View style={styles.statusBadge}>
-                      <Text style={styles.statusText}>PENDING</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.customerInfo}>
-                  <View style={styles.customerAvatar}>
-                    <FontAwesome name="user" size={20} color="#6C63FF" />
-                  </View>
-                  <View style={styles.customerDetails}>
-                    <Text style={styles.customerName}>{item.userName || "Customer"}</Text>
-                    <View style={styles.contactRow}>
-                      <TouchableOpacity 
-                        style={styles.contactButton} 
-                        onPress={() => item.phone && Linking.openURL(`tel:${item.phone}`)}
-                      >
-                        <Entypo name="phone" size={16} color="#6C63FF" />
-                        <Text style={styles.contactText}>{item.phone || "No phone"}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.contactButton} 
-                        onPress={() => item.phone && Linking.openURL(`sms:${item.phone}`)}
-                      >
-                        <MaterialIcons name="sms" size={16} color="#6C63FF" />
-                        <Text style={styles.contactText}>SMS</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Delivery Address</Text>
-                  <Text style={styles.addressText}>{item.address || "No address provided"}</Text>
-                </View>
-
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Order Items</Text>
-                  {item.cartItems.map((product) => (
-                    <View key={product._id} style={styles.productItem}>
-                      <Image 
-                        source={{ uri: product.img.startsWith("http") ? product.img : `https://backendforworld.onrender.com/${product.img.replace(/^\/+/, "")}` }} 
-                        style={styles.productImage} 
-                      />
-                      <View style={styles.productDetails}>
-                        <Text style={styles.productName}>{product.name}</Text>
-                        <Text style={styles.productPrice}>₹{product.price} × {product.quantity}</Text>
-                      </View>
-                      <Text style={styles.productTotal}>₹{(product.price * product.quantity).toFixed(2)}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.totalContainer}>
-                  <Text style={styles.totalLabel}>Order Total:</Text>
-                  <Text style={styles.totalAmount}>₹{totalAmount.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.actionButtons}>
-                  {item.userLocation?.latitude && item.userLocation?.longitude && (
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.locationButton]}
-                      onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.userLocation.latitude},${item.userLocation.longitude}`)}
-                    >
-                      <Ionicons name="location-sharp" size={18} color="white" />
-                      <Text style={styles.actionButtonText}>Customer Location</Text>
-                    </TouchableOpacity>
-                  )}
-                  
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.whatsappButton]}
-                    onPress={() => sendWhatsAppBill(item)}
-                  >
-                    <FontAwesome name="whatsapp" size={18} color="white" />
-                    <Text style={styles.actionButtonText}>Send Bill</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.completeButton]}
-                    onPress={() => handleCompleteOrder(item._id)}
-                  >
-                    <MaterialIcons name="check-circle" size={18} color="white" />
-                    <Text style={styles.actionButtonText}>Complete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          }}
+          renderItem={renderOrderItem}
         />
       )}
     </View>
   );
 };
+
+// ... (keep the same styles object as in your original code)
+
 
 const styles = StyleSheet.create({
   container: {

@@ -159,7 +159,7 @@ const MyOrders: React.FC = () => {
       ) : (
         <FlatList
           data={filteredOrders()}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item) => item._id || Math.random().toString()} // Fallback for missing _id
           renderItem={({ item }) => <OrderList orders={[item]} />}
           refreshControl={
             <RefreshControl

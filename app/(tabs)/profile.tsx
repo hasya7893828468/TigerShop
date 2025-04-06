@@ -1,16 +1,70 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, ActivityIndicator, StyleSheet, Alert, TouchableOpacity, Image } from "react-native";
+import { 
+  View, 
+  Text, 
+  ActivityIndicator, 
+  StyleSheet, 
+  Alert, 
+  TouchableOpacity, 
+  Image,
+  ScrollView,
+  TextInput
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import Toast from 'react-native-toast-message';
 
+// Validation functions
+const validateEmail = (email) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(String(email).toLowerCase());
+};
+
+const validatePhone = (phone) => {
+  const re = /^\+?[1-9]\d{1,14}$/; // E.164 format
+  return re.test(phone);
+};
+
+// Reusable components
+const DetailRow = ({ icon, label, value }) => (
+  <View style={styles.detailItem}>
+    <Ionicons name={icon} size={24} color="#6C63FF" />
+    <View style={styles.detailTextContainer}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  </View>
+);
+
+const Separator = () => <View style={styles.separator} />;
+
+const FormField = ({ label, value, onChangeText, error, icon, ...props }) => (
+  <View style={styles.formField}>
+    <View style={styles.fieldHeader}>
+      <Ionicons name={icon} size={20} color="#6C63FF" />
+      <Text style={styles.fieldLabel}>{label}</Text>
+    </View>
+    <TextInput
+      style={[styles.input, error && styles.inputError]}
+      value={value}
+      onChangeText={onChangeText}
+      {...props}
+    />
+    {error && <Text style={styles.errorText}>{error}</Text>}
+  </View>
+);
+
+// Main Profile Screen Component
 export default function ProfileScreen() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [avatarUri, setAvatarUri] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserData = async () => {
       try {
         const storedUser = await AsyncStorage.getItem("userData");
         if (!storedUser) {
@@ -20,24 +74,78 @@ export default function ProfileScreen() {
 
         const userData = JSON.parse(storedUser);
         setUser(userData);
+        setAvatarUri(userData?.avatar || null);
       } catch (error) {
         console.error("Error fetching user data:", error);
-        Alert.alert("Error", "Failed to load profile details.");
+        Toast.show({
+          type: 'error',
+          text1: 'Profile Error',
+          text2: 'Failed to load profile details.'
+        });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUser();
+    fetchUserData();
   }, []);
 
   const handleLogout = async () => {
+    Alert.alert(
+      "Confirm Logout",
+      "Are you sure you want to sign out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign Out", onPress: performLogout }
+      ]
+    );
+  };
+
+  const performLogout = async () => {
     try {
       await AsyncStorage.clear();
-      Alert.alert("Logged Out", "You have been logged out.");
-      router.replace("/LoginScreen");
+      Toast.show({
+        type: 'success',
+        text1: 'Logged Out',
+        text2: 'You have been successfully logged out.'
+      });
+      router.replace("/Logout");
     } catch (error) {
-      console.error("Error during logout:", error);
+      console.error("Logout error:", error);
+      Toast.show({
+        type: 'error',
+        text1: 'Logout Failed',
+        text2: 'Could not complete logout. Please try again.'
+      });
+    }
+  };
+
+  const handleEditProfile = () => {
+    router.push({
+      pathname: "/EditProfileScreen",
+      params: { user: JSON.stringify(user) }
+    });
+  };
+
+  const updateAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert("Permission Required", "Please enable photo access to upload images.");
+      return;
+    }
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setAvatarUri(result.assets[0].uri);
+      const updatedUser = { ...user, avatar: result.assets[0].uri };
+      await AsyncStorage.setItem("userData", JSON.stringify(updatedUser));
+      setUser(updatedUser);
     }
   };
 
@@ -50,25 +158,33 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      {/* <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Profile</Text>
-      </View> */}
-
-      {/* Profile Content */}
+    <ScrollView style={styles.container}>
       <View style={styles.content}>
         {/* Avatar Section */}
         <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            {user?.name ? (
-              <Text style={styles.avatarText}>
-                {user.name.charAt(0).toUpperCase()}
-              </Text>
+          <TouchableOpacity 
+            style={styles.avatarWrapper}
+            onPress={updateAvatar}
+            accessibilityLabel="Change profile photo"
+          >
+            {avatarUri ? (
+              <Image 
+                source={{ uri: avatarUri }} 
+                style={styles.avatarImage} 
+                accessibilityIgnoresInvertColors
+              />
             ) : (
-              <Ionicons name="person" size={60} color="#fff" />
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarText}>
+                  {user?.name?.charAt(0)?.toUpperCase() || 'G'}
+                </Text>
+              </View>
             )}
-          </View>
+            <View style={styles.editAvatarBadge}>
+              <Ionicons name="camera" size={20} color="#fff" />
+            </View>
+          </TouchableOpacity>
+          
           <Text style={styles.userName}>{user?.name || "Guest User"}</Text>
           <Text style={styles.userEmail}>{user?.email || ""}</Text>
         </View>
@@ -76,138 +192,106 @@ export default function ProfileScreen() {
         {/* Details Section */}
         {user ? (
           <View style={styles.detailsCard}>
-            <View style={styles.detailItem}>
-              <Ionicons name="person-outline" size={24} color="#6C63FF" />
-              <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Full Name</Text>
-                <Text style={styles.detailValue}>{user.name}</Text>
-              </View>
-            </View>
-
-            <View style={styles.separator} />
-
-            <View style={styles.detailItem}>
-              <Ionicons name="mail-outline" size={24} color="#6C63FF" />
-              <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Email Address</Text>
-                <Text style={styles.detailValue}>{user.email}</Text>
-              </View>
-            </View>
-
-            <View style={styles.separator} />
-
-            <View style={styles.detailItem}>
-              <Ionicons name="call-outline" size={24} color="#6C63FF" />
-              <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Phone Number</Text>
-                <Text style={styles.detailValue}>{user.phone || "Not provided"}</Text>
-              </View>
-            </View>
-
-            <View style={styles.separator} />
-
-            <View style={styles.detailItem}>
-              <Ionicons name="home-outline" size={24} color="#6C63FF" />
-              <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Address</Text>
-                <Text style={styles.detailValue}>{user.address || "Not provided"}</Text>
-              </View>
-            </View>
+            <DetailRow 
+              icon="person-outline"
+              label="Full Name"
+              value={user.name}
+            />
+            <Separator />
+            <DetailRow
+              icon="mail-outline"
+              label="Email Address"
+              value={user.email}
+            />
+            <Separator />
+            <DetailRow
+              icon="call-outline"
+              label="Phone Number"
+              value={user.phone || "Not provided"}
+            />
+            <Separator />
+            <DetailRow
+              icon="home-outline"
+              label="Address"
+              value={user.address || "Not provided"}
+            />
           </View>
         ) : (
           <Text style={styles.errorText}>User data not found</Text>
         )}
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={24} color="#fff" />
-          <Text style={styles.logoutButtonText}>Sign Out</Text>
-        </TouchableOpacity>
+        {/* Action Buttons */}
+        <View style={styles.buttonGroup}>
+      
+          <TouchableOpacity 
+            style={[styles.button, styles.logoutButton]}
+            onPress={handleLogout}
+          >
+            <Ionicons name="log-out-outline" size={22} color="#fff" />
+            <Text style={styles.logoutButtonText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+      
+      <Toast />
+    </ScrollView>
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff'
-  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f7'
   },
-  header: {
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    backgroundColor: '#6C63FF',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center'
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
   },
   content: {
-    flex: 1,
-    padding: 20,
-    marginTop: 20
+    padding: 20
   },
   avatarContainer: {
     alignItems: 'center',
-    marginBottom: 30
+    marginVertical: 20
   },
-  avatar: {
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 15
+  },
+  avatarImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60
+  },
+  avatarFallback: {
     width: 120,
     height: 120,
     borderRadius: 60,
     backgroundColor: '#6C63FF',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4
+    alignItems: 'center'
   },
   avatarText: {
     fontSize: 48,
     fontWeight: 'bold',
     color: '#fff'
   },
-  userName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#666'
+  editAvatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#6C63FF',
+    borderRadius: 15,
+    padding: 5
   },
   detailsCard: {
     backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3
+    elevation: 2
   },
   detailItem: {
     flexDirection: 'row',
@@ -215,12 +299,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12
   },
   detailTextContainer: {
-    marginLeft: 15
+    marginLeft: 15,
+    flex: 1
   },
   detailLabel: {
     fontSize: 14,
-    color: '#888',
-    marginBottom: 2
+    color: '#666'
   },
   detailValue: {
     fontSize: 16,
@@ -230,31 +314,83 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: '#eee',
-    marginVertical: 5
+    marginVertical: 8
+  },
+  buttonGroup: {
+    gap: 12
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 10,
+    elevation: 2
+  },
+  editButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#6C63FF'
+  },
+  editButtonText: {
+    color: '#6C63FF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10
   },
   logoutButton: {
+    backgroundColor: '#6C63FF'
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10
+  },
+  saveButton: {
     backgroundColor: '#6C63FF',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3
+    marginTop: 20
   },
-  logoutButtonText: {
+  saveButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     marginLeft: 10
   },
-  errorText: {
+  formField: {
+    marginBottom: 16
+  },
+  fieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  fieldLabel: {
+    marginLeft: 8,
+    color: '#444',
+    fontSize: 14
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd'
+  },
+  inputError: {
+    borderColor: '#ff4444'
+  },
+  errorText: {
     color: '#ff4444',
-    textAlign: 'center',
-    marginTop: 20
+    fontSize: 12,
+    marginTop: 4
   }
 });
+
+// Export both screens

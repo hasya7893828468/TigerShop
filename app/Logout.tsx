@@ -8,13 +8,16 @@ export default function LogoutScreen() {
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.clear();
+      // Only remove user session-related data
+      await AsyncStorage.multiRemove(["authToken", "userId", "userData"]);
+  
       Alert.alert("✅ Logged out", "You have been successfully logged out.");
       router.replace("/LoginScreen");
     } catch (error) {
       console.error("❌ Error during logout:", error);
     }
   };
+  
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>

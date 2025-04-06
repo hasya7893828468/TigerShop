@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { RocketIcon } from "lucide-react-native";
 
 export default function TabLayout() {
   return (
@@ -21,8 +22,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="two"
         options={{
-          title: "Settings",
-          tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} />,
+          title: "AI ",
+          tabBarIcon: ({ color, size }) => <RocketIcon name="Ai - chat" size={size} color={color} />,
         }}
       />
     </Tabs>
